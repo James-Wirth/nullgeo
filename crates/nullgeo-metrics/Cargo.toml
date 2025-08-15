@@ -1,0 +1,11 @@
+[package]
+name = "nullgeo-metrics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "nullgeo-metrics"
+
+[dependencies]
+nullgeo-core = { path = "../nullgeo-core" }
+# nalgebra.workspace = true

@@ -1,0 +1,20 @@
+[package]
+name = "nullgeo-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "nullgeo-core"
+
+[features]
+default = []
+parallel = ["dep:rayon"] 
+
+[dependencies]
+nalgebra.workspace = true
+thiserror.workspace = true
+rayon = { workspace = true, optional = true }
+
+[dev-dependencies]
+approx.workspace = true
