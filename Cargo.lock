@@ -443,6 +443,7 @@ dependencies = [
  "predicates",
  "nullgeo-core",
  "nullgeo-metrics",
+ "rayon",
  "serde",
  "toml",
 ]

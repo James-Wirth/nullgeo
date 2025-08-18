@@ -1,6 +1,7 @@
 mod io; 
 
 use clap::{Parser, Subcommand, ValueEnum};
+use rayon::prelude::*;
 use nullgeo_core::metric::{State4, Vec4, Metric};
 use nullgeo_core::integrator::{rk4_step};
 use nullgeo_core::{Camera, CameraSpec};
@@ -62,9 +63,14 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Propagate { dl, steps } => { }
-
-        Command::Render { width, height, fov_deg, energy, steps, dl } => { }
+        Command::Propagate { .. } => {
+            eprintln!("'propagate' not yet written");
+            std::process::exit(1);
+        }
+        Command::Render { .. } => {
+            eprintln!("'render' not yet written");
+            std::process::exit(1);
+        }
 
         Command::Shadow { metric, mass, width, height, fov_deg, cam_x, energy, dl, max_steps, out } => {
 
@@ -75,10 +81,9 @@ fn main() {
             };
 
             let cam = Camera::from_spec(CameraSpec { fov_deg, res: (width, height), energy });
-            let dirs_cov = cam.generate_rays(); 
+            let rays_p_cov = cam.generate_rays(); 
 
             let x0 = Vec4::new(0.0, cam_x, 0.0, 0.0);
-
             let r_h = 2.0 * mass;
             let r_cap = 1.05 * r_h;
             let x_far = -cam_x + 5.0 * r_h.max(1.0); 
@@ -90,8 +95,17 @@ fn main() {
                 (xi*xi + yi*yi + zi*zi).sqrt()
             };
 
-            for (idx, p_flat) in dirs_cov.iter().enumerate() {
-                let sx = p_flat[1]; let sy = p_flat[2]; let sz = p_flat[3];
+            
+            img.par_iter_mut()
+                .enumerate()
+                .for_each(|(idx, out_px)|{
+
+                let p_flat = &rays_p_cov[idx];
+
+                let sx = p_flat[1]; 
+                let sy = p_flat[2]; 
+                let sz = p_flat[3];
+
                 let s_norm = (sx*sx + sy*sy + sz*sz).sqrt().max(1e-20);
                 let n = [sx/s_norm, sy/s_norm, sz/s_norm];
 
@@ -104,22 +118,25 @@ fn main() {
                             s = rk4_step(m, &s, dl);
                             if s.x[1] > cam_x + x_far { break; }
                         }
-                        img[idx] = 255; 
+                        *out_px = 255; 
                     }
                     AnyMetric::S(m) => {
                         s.p = make_null_covector(m, &s.x, n, energy);
                         let mut captured = false;
                         for _ in 0..max_steps {
                             s = rk4_step(m, &s, dl);
-                            let r = radius(&s.x);
+                            
+                            let xi = s.x[1]; let yi = s.x[2]; let zi = s.x[3];
+                            let r = (xi*xi + yi*yi + zi*zi).sqrt();
+
                             if r < r_cap { captured = true; break; }
                             if s.x[1] > cam_x + x_far { break; }
                             if r > 1.0e6 { break; }
                         }
-                        img[idx] = if captured { 0 } else { 255 };
+                        *out_px = if captured { 0 } else { 255 };
                     }
                 }
-            }
+            });
 
             if let Err(e) = io::write_ppm_gray(&out, width, height, &img) {
                 eprintln!("Failed to write {}: {}", out, e);
@@ -136,7 +153,10 @@ fn make_null_covector<M: Metric>(metric: &M, x: &Vec4, n: [f64;3], e: f64) -> Ve
     let qi = [e*n[0], e*n[1], e*n[2]];
 
     let mut a = ginv[(0,0)];
-    if a.abs() < 1e-15 { a = a.signum() * 1e-15; }
+    if a.abs() < 1e-15 {
+        let s = if a >= 0.0 { 1.0 } else { -1.0 }; 
+        a = s * 1e-15;
+    }
 
     let b = 2.0 * (ginv[(0,1)]*qi[0] + ginv[(0,2)]*qi[1] + ginv[(0,3)]*qi[2]);
     let c = ginv[(1,1)]*qi[0]*qi[0]

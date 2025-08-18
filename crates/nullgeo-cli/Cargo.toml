@@ -14,6 +14,7 @@ parallel = ["nullgeo-core/parallel"]
 nullgeo-core = { path = "../nullgeo-core" }      
 nullgeo-metrics = { path = "../nullgeo-metrics" }
 clap = { version = "4.5", features = ["derive"] }
+rayon = "1.10"
 env_logger = "0.11"
 log = "0.4"
 serde.workspace = true
