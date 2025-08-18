@@ -89,13 +89,7 @@ fn main() {
             let x_far = -cam_x + 5.0 * r_h.max(1.0); 
 
             let mut img = vec![255u8; width*height];
-
-            let radius = |x: &Vec4| -> f64 {
-                let xi = x[1]; let yi = x[2]; let zi = x[3];
-                (xi*xi + yi*yi + zi*zi).sqrt()
-            };
-
-            
+       
             img.par_iter_mut()
                 .enumerate()
                 .for_each(|(idx, out_px)|{
