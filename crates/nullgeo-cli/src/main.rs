@@ -134,7 +134,10 @@ use nullgeo_core::metric::{Mat4};
 fn make_null_covector<M: Metric>(metric: &M, x: &Vec4, n: [f64;3], e: f64) -> Vec4 {
     let ginv: Mat4 = metric.g_inv(x);
     let qi = [e*n[0], e*n[1], e*n[2]];
-    let a = ginv[(0,0)];
+
+    let mut a = ginv[(0,0)];
+    if a.abs() < 1e-15 { a = a.signum() * 1e-15; }
+
     let b = 2.0 * (ginv[(0,1)]*qi[0] + ginv[(0,2)]*qi[1] + ginv[(0,3)]*qi[2]);
     let c = ginv[(1,1)]*qi[0]*qi[0]
           + ginv[(2,2)]*qi[1]*qi[1]
@@ -142,7 +145,12 @@ fn make_null_covector<M: Metric>(metric: &M, x: &Vec4, n: [f64;3], e: f64) -> Ve
           + 2.0*( ginv[(1,2)]*qi[0]*qi[1] + ginv[(1,3)]*qi[0]*qi[2] + ginv[(2,3)]*qi[1]*qi[2] );
     let disc = (b*b - 4.0*a*c).max(0.0);
     let sqrt_disc = disc.sqrt();
-    let (r1, r2) = ((-b - sqrt_disc)/(2.0*a), (-b + sqrt_disc)/(2.0*a));
-    let p0 = if r1.is_finite() && r1 < r2 { r1 } else { r2 };
+    
+    let r1 = (-b - sqrt_disc)/(2.0*a);
+    let r2 = (-b + sqrt_disc)/(2.0*a);
+    let (rneg, rpos) = if r1 <= r2 { (r1, r2) } else { (r2, r1) };
+    let mut p0 = if rneg.is_finite() { rneg } else { rpos };
+    if p0 > 0.0 && rneg.is_finite() { p0 = rneg; }
+
     Vec4::new(p0, qi[0], qi[1], qi[2])
 }
