@@ -1,12 +1,17 @@
-use clap::{Parser, Subcommand};
-use nullgeo_core::metric::{State4, Vec4};
-use nullgeo_core::integrator::{rk4_step, hamiltonian};
-use nullgeo_core::{Camera, CameraSpec, RayBundle};
+mod io; 
+
+use clap::{Parser, Subcommand, ValueEnum};
+use nullgeo_core::metric::{State4, Vec4, Metric};
+use nullgeo_core::integrator::{rk4_step};
+use nullgeo_core::{Camera, CameraSpec};
 use nullgeo_metrics::minkowski::Minkowski;
-use log::{info, warn};
+use nullgeo_metrics::schwarzschild::Schwarzschild;
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum MetricKind { Minkowski, Schwarzschild }
 
 #[derive(Parser, Debug)]
-#[command(name="nullgeo", about="nullgeo")]
+#[command(name="nullgeo", about="GR Ray Tracing")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -26,6 +31,29 @@ enum Command {
         #[arg(long, default_value_t=1.0)] energy: f64,
         #[arg(long, default_value_t=0)] steps: usize,
         #[arg(long, default_value_t=0.05)] dl: f64
+    },
+
+    Shadow {
+        #[arg(long, value_enum, default_value_t=MetricKind::Schwarzschild)]
+        metric: MetricKind,
+        #[arg(long, default_value_t=1.0)]
+        mass: f64,
+        #[arg(long, default_value_t=256)]
+        width: usize,
+        #[arg(long, default_value_t=256)]
+        height: usize,
+        #[arg(long, default_value_t=20.0)]
+        fov_deg: f64,
+        #[arg(long, default_value_t=-15.0)]
+        cam_x: f64,   
+        #[arg(long, default_value_t=1.0)]
+        energy: f64,
+        #[arg(long, default_value_t=0.01)]
+        dl: f64,
+        #[arg(long, default_value_t=5000)]
+        max_steps: usize,
+        #[arg(long, default_value = "shadow.ppm")]
+        out: String,
     }
 }
 
@@ -34,51 +62,87 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Propagate { dl, steps } => {
-            let metric = Minkowski;
+        Command::Propagate { dl, steps } => { }
 
-            let e = 1.0;
-            let mut state = State4 { x: Vec4::zeros(), p: Vec4::new(-e, e, 0.0, 0.0) };
+        Command::Render { width, height, fov_deg, energy, steps, dl } => { }
 
-            let h0 = hamiltonian(&metric, &state);
-            for _ in 0..steps { state = rk4_step(&metric, &state, dl); }
-            let h1 = hamiltonian(&metric, &state);
+        Command::Shadow { metric, mass, width, height, fov_deg, cam_x, energy, dl, max_steps, out } => {
 
-            println!("Final x: {:?}", state.x);
-            println!("H0 = {:.15e}, H1 = {:.15e}, ΔH = {:+.3e}", h0, h1, h1 - h0);
-        }
+            enum AnyMetric { M(Minkowski), S(Schwarzschild) }
+            let metric = match metric {
+                MetricKind::Minkowski => AnyMetric::M(Minkowski),
+                MetricKind::Schwarzschild => AnyMetric::S(Schwarzschild { m: mass }),
+            };
 
-        Command::Render { width, height, fov_deg, energy, steps, dl } => {
             let cam = Camera::from_spec(CameraSpec { fov_deg, res: (width, height), energy });
-            let ps = cam.generate_rays();
-            info!("Generated {} primary rays", ps.len());
+            let dirs_cov = cam.generate_rays(); 
 
-            let mut bundle = RayBundle::new(ps.len());
-            for (i, p) in ps.into_iter().enumerate() {
-                bundle.x[i] = Vec4::zeros();
-                bundle.p[i] = p;
+            let x0 = Vec4::new(0.0, cam_x, 0.0, 0.0);
+
+            let r_h = 2.0 * mass;
+            let r_cap = 1.05 * r_h;
+            let x_far = -cam_x + 5.0 * r_h.max(1.0); 
+
+            let mut img = vec![255u8; width*height];
+
+            let radius = |x: &Vec4| -> f64 {
+                let xi = x[1]; let yi = x[2]; let zi = x[3];
+                (xi*xi + yi*yi + zi*zi).sqrt()
+            };
+
+            for (idx, p_flat) in dirs_cov.iter().enumerate() {
+                let sx = p_flat[1]; let sy = p_flat[2]; let sz = p_flat[3];
+                let s_norm = (sx*sx + sy*sy + sz*sz).sqrt().max(1e-20);
+                let n = [sx/s_norm, sy/s_norm, sz/s_norm];
+
+                let mut s = State4 { x: x0, p: Vec4::zeros() };
+
+                match &metric {
+                    AnyMetric::M(m) => {
+                        s.p = Vec4::new(-energy, energy*n[0], energy*n[1], energy*n[2]);
+                        for _ in 0..max_steps {
+                            s = rk4_step(m, &s, dl);
+                            if s.x[1] > cam_x + x_far { break; }
+                        }
+                        img[idx] = 255; 
+                    }
+                    AnyMetric::S(m) => {
+                        s.p = make_null_covector(m, &s.x, n, energy);
+                        let mut captured = false;
+                        for _ in 0..max_steps {
+                            s = rk4_step(m, &s, dl);
+                            let r = radius(&s.x);
+                            if r < r_cap { captured = true; break; }
+                            if s.x[1] > cam_x + x_far { break; }
+                            if r > 1.0e6 { break; }
+                        }
+                        img[idx] = if captured { 0 } else { 255 };
+                    }
+                }
             }
 
-            if steps > 0 {
-                let metric = Minkowski;
-                for _ in 0..steps {
-                    #[cfg(feature = "parallel")]
-                    { bundle.step_par(&metric, dl); }
-                    #[cfg(not(feature = "parallel"))]
-                    { bundle.step(&metric, dl); }
-                }
-
-                let mut hmean = 0.0;
-                for i in 0..bundle.len() {
-                    let s = nullgeo_core::metric::State4 { x: bundle.x[i], p: bundle.p[i] };
-                    hmean += hamiltonian(&Minkowski, &s);
-                }
-                hmean /= bundle.len() as f64;
-                println!("Bundle rays: {}, steps: {}, ⟨H⟩ ≈ {:.3e}", bundle.len(), steps, hmean);
+            if let Err(e) = io::write_ppm_gray(&out, width, height, &img) {
+                eprintln!("Failed to write {}: {}", out, e);
             } else {
-                println!("Bundle rays: {}", bundle.len());
-                warn!("No propagation carried out (steps=0).");
+                println!("Wrote {}", out);
             }
         }
     }
+}
+
+use nullgeo_core::metric::{Mat4};
+fn make_null_covector<M: Metric>(metric: &M, x: &Vec4, n: [f64;3], e: f64) -> Vec4 {
+    let ginv: Mat4 = metric.g_inv(x);
+    let qi = [e*n[0], e*n[1], e*n[2]];
+    let a = ginv[(0,0)];
+    let b = 2.0 * (ginv[(0,1)]*qi[0] + ginv[(0,2)]*qi[1] + ginv[(0,3)]*qi[2]);
+    let c = ginv[(1,1)]*qi[0]*qi[0]
+          + ginv[(2,2)]*qi[1]*qi[1]
+          + ginv[(3,3)]*qi[2]*qi[2]
+          + 2.0*( ginv[(1,2)]*qi[0]*qi[1] + ginv[(1,3)]*qi[0]*qi[2] + ginv[(2,3)]*qi[1]*qi[2] );
+    let disc = (b*b - 4.0*a*c).max(0.0);
+    let sqrt_disc = disc.sqrt();
+    let (r1, r2) = ((-b - sqrt_disc)/(2.0*a), (-b + sqrt_disc)/(2.0*a));
+    let p0 = if r1.is_finite() && r1 < r2 { r1 } else { r2 };
+    Vec4::new(p0, qi[0], qi[1], qi[2])
 }
