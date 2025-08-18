@@ -62,7 +62,7 @@ impl Metric for Schwarzschild {
         let h = self.h(r);
         let l = Self::l_up(n);
 
-        let dH = |i: usize| -> f64 { -h * n[i] / r }; 
+        let dh = |i: usize| -> f64 { -h * n[i] / r }; 
         let dl = |i: usize, alpha: usize| -> f64 {
             if alpha == 0 { return 0.0; }
             let a = alpha - 1; 
@@ -77,7 +77,7 @@ impl Metric for Schwarzschild {
             for a in 0..4 {
                 for b in 0..4 {
                     let term =
-                        dH(i) * l[a] * l[b]
+                        dh(i) * l[a] * l[b]
                         + h * dl(i, a) * l[b]
                         + h * l[a] * dl(i, b);
                     m[(a,b)] = -2.0 * term;
