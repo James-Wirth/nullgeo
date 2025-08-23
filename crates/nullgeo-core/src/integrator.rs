@@ -7,15 +7,13 @@ impl Default for Tolerances { fn default() -> Self { Self { rtol: 1e-9, atol: 1e
 /// dx^mu/ds, dp_mu/ds.
 pub fn rhs_hamiltonian<M: Metric>(m: &M, s: &State4) -> (Vec4, Vec4) {
     let ginv = m.g_inv(&s.x);
-
     let dx = ginv * s.p;
 
     let mut dp = Vec4::zeros();
     if let Some(dginv) = m.dg_inv(&s.x) {
         for mu in 0..4 {
-            let d = &dginv[mu];
-            let mut q = 0.0;
-            for a in 0..4 { for b in 0..4 { q += d[(a,b)] * s.p[a] * s.p[b]; } }
+            let v = dginv[mu] * s.p;    
+            let q = s.p.dot(&v);         
             dp[mu] = -0.5 * q;
         }
     } else {
