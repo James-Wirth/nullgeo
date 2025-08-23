@@ -18,26 +18,38 @@ impl Camera {
     pub fn generate_rays(&self) -> Vec<Vec4> {
         let (w, h) = self.spec.res;
         let mut ps = Vec::with_capacity(w * h);
-        let fov_rad = self.spec.fov_deg.to_radians();
-        let half = (fov_rad * 0.5).tan();
+    
+        let fov = self.spec.fov_deg;
+        assert!((0.0..180.0).contains(&fov), "fov_deg must be in (0, 180)");
+        let fov_rad = fov.to_radians();
+        let half = (0.5 * fov_rad).tan();
+    
+        let aspect = w as f64 / h as f64;
+        let inv_w = 1.0 / w as f64;
+        let inv_h = 1.0 / h as f64;
+    
         let e = self.spec.energy.max(1e-12);
-
+    
         for j in 0..h {
+            let ndc_v = 1.0 - 2.0 * ((j as f64 + 0.5) * inv_h);
             for i in 0..w {
-                let u = (2.0 * (i as f64 + 0.5) / w as f64 - 1.0) * half;   
-                let v = (1.0 - 2.0 * (j as f64 + 0.5) / h as f64) * half;   
-
+                let ndc_u = 2.0 * ((i as f64 + 0.5) * inv_w) - 1.0;
+    
+                let u = ndc_u * half;
+                let v = ndc_v * (half / aspect);
+    
                 let sx = 1.0;
                 let sy = u;
                 let sz = v;
-                let norm = (sx*sx + sy*sy + sz*sz).sqrt();
-                let nx = sx / norm;
-                let ny = sy / norm;
-                let nz = sz / norm;
-
+    
+                let inv_norm = 1.0 / (sx*sx + sy*sy + sz*sz).sqrt();
+                let nx = sx * inv_norm;
+                let ny = sy * inv_norm;
+                let nz = sz * inv_norm;
+    
                 ps.push(Vec4::new(-e, e*nx, e*ny, e*nz));
             }
         }
         ps
-    }
+    }    
 }
