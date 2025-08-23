@@ -74,52 +74,49 @@ fn main() {
 
         Command::Shadow { metric, mass, width, height, fov_deg, cam_x, energy, dl, max_steps, out } => {
 
-            enum AnyMetric { M(Minkowski), S(Schwarzschild) }
-            let metric = match metric {
-                MetricKind::Minkowski => AnyMetric::M(Minkowski),
-                MetricKind::Schwarzschild => AnyMetric::S(Schwarzschild { m: mass }),
-            };
+        enum AnyMetric { M(Minkowski), S(Schwarzschild) }
+        let metric = match metric {
+            MetricKind::Minkowski => AnyMetric::M(Minkowski),
+            MetricKind::Schwarzschild => AnyMetric::S(Schwarzschild { m: mass }),
+        };
 
-            let cam = Camera::from_spec(CameraSpec { fov_deg, res: (width, height), energy });
-            let rays_p_cov = cam.generate_rays(); 
+        let cam = Camera::from_spec(CameraSpec { fov_deg, res: (width, height), energy });
+        let rays_p_cov = cam.generate_rays();
 
-            let x0 = Vec4::new(0.0, cam_x, 0.0, 0.0);
-            let r_h = 2.0 * mass;
-            let r_cap = 1.05 * r_h;
-            let x_far = -cam_x + 5.0 * r_h.max(1.0); 
+        let dirs_opt: Option<Vec<[f64; 3]>> = match &metric {
+            AnyMetric::S(_) => Some(cam.generate_directions()),
+            _ => None,
+        };
 
-            let mut img = vec![255u8; width*height];
-       
-            img.par_iter_mut()
-                .enumerate()
-                .for_each(|(idx, out_px)|{
+        let x0 = Vec4::new(0.0, cam_x, 0.0, 0.0);
+        let r_h = 2.0 * mass;
+        let r_cap = 1.05 * r_h;
+        let x_far = -cam_x + 5.0 * r_h.max(1.0);
 
-                let p_flat = &rays_p_cov[idx];
+        let mut img = vec![255u8; width * height];
 
-                let sx = p_flat[1]; 
-                let sy = p_flat[2]; 
-                let sz = p_flat[3];
-
-                let s_norm = (sx*sx + sy*sy + sz*sz).sqrt().max(1e-20);
-                let n = [sx/s_norm, sy/s_norm, sz/s_norm];
-
+        img.par_iter_mut()
+            .enumerate()
+            .for_each(|(idx, out_px)| {
                 let mut s = State4 { x: x0, p: Vec4::zeros() };
 
                 match &metric {
                     AnyMetric::M(m) => {
-                        s.p = Vec4::new(-energy, energy*n[0], energy*n[1], energy*n[2]);
+                        s.p = rays_p_cov[idx];
                         for _ in 0..max_steps {
                             s = rk4_step(m, &s, dl);
                             if s.x[1] > cam_x + x_far { break; }
                         }
-                        *out_px = 255; 
+                        *out_px = 255;
                     }
                     AnyMetric::S(m) => {
+                        let n = dirs_opt.as_ref().unwrap()[idx];
                         s.p = make_null_covector(m, &s.x, n, energy);
+
                         let mut captured = false;
                         for _ in 0..max_steps {
                             s = rk4_step(m, &s, dl);
-                            
+
                             let xi = s.x[1]; let yi = s.x[2]; let zi = s.x[3];
                             let r = (xi*xi + yi*yi + zi*zi).sqrt();
 
