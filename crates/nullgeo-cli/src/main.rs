@@ -2,7 +2,7 @@ mod io;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use rayon::prelude::*;
-use nullgeo_core::metric::{State4, Vec4, Metric};
+use nullgeo_core::metric::{State4, Vec4, Mat4, Metric};
 use nullgeo_core::integrator::{rk4_step};
 use nullgeo_core::{Camera, CameraSpec};
 use nullgeo_metrics::minkowski::Minkowski;
@@ -138,30 +138,49 @@ fn main() {
     }
 }
 
-use nullgeo_core::metric::{Mat4};
-fn make_null_covector<M: Metric>(metric: &M, x: &Vec4, n: [f64;3], e: f64) -> Vec4 {
-    let ginv: Mat4 = metric.g_inv(x);
-    let qi = [e*n[0], e*n[1], e*n[2]];
+#[inline] fn lower(g: &Mat4, v: &Vec4) -> Vec4 { g * v }
+#[inline] fn dot(g: &Mat4, a: &Vec4, b: &Vec4) -> f64 { (a.transpose() * (*g) * (*b))[0] }
+#[inline] fn norm_timelike(g: &Mat4, v: &Vec4) -> f64 { (-dot(g, v, v)).sqrt() }
+#[inline] fn norm_spacelike(g: &Mat4, v: &Vec4) -> f64 { (dot(g, v, v)).sqrt() }
+#[inline] fn normalize_timelike(g: &Mat4, v: &Vec4) -> Vec4 { v / norm_timelike(g, v).max(1e-300) }
+#[inline] fn normalize_spacelike(g: &Mat4, v: &Vec4) -> Vec4 { v / norm_spacelike(g, v).max(1e-300) }
+#[inline] fn project_out(g: &Mat4, v: &Vec4, onto: &Vec4) -> Vec4 {
+    let num = dot(g, v, onto);
+    let den = dot(g, onto, onto);
+    if den.abs() < 1e-300 { *v } else { v - onto * (num / den) }
+}
 
-    let mut a = ginv[(0,0)];
-    if a.abs() < 1e-15 {
-        let s = if a >= 0.0 { 1.0 } else { -1.0 }; 
-        a = s * 1e-15;
-    }
+fn build_coframe<M: Metric>(metric: &M, x: &Vec4) -> [Vec4; 4] {
+    let g = metric.g(x);
 
-    let b = 2.0 * (ginv[(0,1)]*qi[0] + ginv[(0,2)]*qi[1] + ginv[(0,3)]*qi[2]);
-    let c = ginv[(1,1)]*qi[0]*qi[0]
-          + ginv[(2,2)]*qi[1]*qi[1]
-          + ginv[(3,3)]*qi[2]*qi[2]
-          + 2.0*( ginv[(1,2)]*qi[0]*qi[1] + ginv[(1,3)]*qi[0]*qi[2] + ginv[(2,3)]*qi[1]*qi[2] );
-    let disc = (b*b - 4.0*a*c).max(0.0);
-    let sqrt_disc = disc.sqrt();
-    
-    let r1 = (-b - sqrt_disc)/(2.0*a);
-    let r2 = (-b + sqrt_disc)/(2.0*a);
-    let (rneg, rpos) = if r1 <= r2 { (r1, r2) } else { (r2, r1) };
-    let mut p0 = if rneg.is_finite() { rneg } else { rpos };
-    if p0 > 0.0 && rneg.is_finite() { p0 = rneg; }
+    let mut t = Vec4::new(1.0, 0.0, 0.0, 0.0);
+    if g[(0,0)].abs() < 1e-14 { t = Vec4::new(1.0, 1e-8, 0.0, 0.0); }
+    let mut e0 = normalize_timelike(&g, &t);
+    if e0[0] < 0.0 { e0 = -e0; }
 
-    Vec4::new(p0, qi[0], qi[1], qi[2])
+    let ex = project_out(&g, &Vec4::new(0.0, 1.0, 0.0, 0.0), &e0);
+    let e1 = normalize_spacelike(&g, &ex);
+
+    let mut ey = project_out(&g, &Vec4::new(0.0, 0.0, 1.0, 0.0), &e0);
+    ey = project_out(&g, &ey, &e1);
+    let e2 = normalize_spacelike(&g, &ey);
+
+    let mut ez = project_out(&g, &Vec4::new(0.0, 0.0, 0.0, 1.0), &e0);
+    ez = project_out(&g, &ez, &e1);
+    ez = project_out(&g, &ez, &e2);
+    let e3 = normalize_spacelike(&g, &ez);
+
+    [lower(&g, &e0), lower(&g, &e1), lower(&g, &e2), lower(&g, &e3)]
+}
+
+pub fn make_null_covector<M: Metric>(metric: &M, x: &Vec4, n: [f64;3], e: f64) -> Vec4 {
+    let norm = (n[0]*n[0] + n[1]*n[1] + n[2]*n[2]).sqrt().max(1e-300);
+    let nx = n[0]/norm; let ny = n[1]/norm; let nz = n[2]/norm;
+
+    let th = build_coframe(metric, x);
+    let mut p = th[0] * e;
+    p += th[1] * (e * nx);
+    p += th[2] * (e * ny);
+    p += th[3] * (e * nz);
+    p
 }
