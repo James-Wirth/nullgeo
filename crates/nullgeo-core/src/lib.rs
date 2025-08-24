@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! nullgeo Conventions!
+//! nullgeo conventions!
 //! - The general relativist's metric signature: (-, +, +, +) 
 //! - Geometric units (G = c = 1), because life is too short for anything else.
 //! - Coordinates: for flat space we use (t, x, y, z). For general metrics, there are no rules.

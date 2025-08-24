@@ -231,6 +231,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "nullgeo-cli"
+version = "0.1.0"
+dependencies = [
+ "assert_cmd",
+ "clap",
+ "env_logger",
+ "nullgeo-core",
+ "nullgeo-metrics",
+ "log",
+ "predicates",
+ "rayon",
+ "serde",
+ "toml",
+]
+
+[[package]]
+name = "nullgeo-core"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "nalgebra",
+ "rayon",
+ "thiserror",
+]
+
+[[package]]
+name = "nullgeo-metrics"
+version = "0.1.0"
+dependencies = [
+ "nullgeo-core",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.15.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -430,39 +463,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1885c039570dc00dcb4ff087a89e185fd56bae234ddc7f056a945bf36467248d"
 dependencies = [
  "proc-macro2",
-]
-
-[[package]]
-name = "nullgeo-cli"
-version = "0.1.0"
-dependencies = [
- "assert_cmd",
- "clap",
- "env_logger",
- "log",
- "predicates",
- "nullgeo-core",
- "nullgeo-metrics",
- "rayon",
- "serde",
- "toml",
-]
-
-[[package]]
-name = "nullgeo-core"
-version = "0.1.0"
-dependencies = [
- "approx",
- "nalgebra",
- "rayon",
- "thiserror",
-]
-
-[[package]]
-name = "nullgeo-metrics"
-version = "0.1.0"
-dependencies = [
- "nullgeo-core",
 ]
 
 [[package]]
