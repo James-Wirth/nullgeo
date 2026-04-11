@@ -1,8 +1,10 @@
-# nullgeo - general relativistic ray-tracing
+<p align="center">
+  <img src="assets/logo.svg" alt="nullgeo" width="420">
+</p>
 
 ## About
 
-This is a fast(ish) general relativistic ray-tracing engine built with Rust. The long-term goal is to support relativistic visualisation (e.g. black hole shadows, gravitational lensing, and eventually radiative transfer effects like attenuation) in arbitrary spacetime geometries.  
+This is a fast general relativistic ray-tracing engine built with Rust. The long-term goal is to support relativistic visualisation (e.g. black hole shadows, gravitational lensing, and eventually radiative transfer effects like attenuation) in arbitrary spacetime geometries.  
 
 All quantities are in geometrized units ($G=c=1$).
 
