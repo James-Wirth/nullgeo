@@ -12,7 +12,7 @@ use nullgeo_metrics::schwarzschild::Schwarzschild;
 enum MetricKind { Minkowski, Schwarzschild }
 
 #[derive(Parser, Debug)]
-#[command(name="nullgeo", about="GR Ray Tracing")]
+#[command(name="nullgeo", about="nullgeo - general relativistic ray tracing")]
 struct Cli {
     #[command(subcommand)]
     command: Command,
