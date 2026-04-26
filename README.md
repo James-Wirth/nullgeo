@@ -8,12 +8,41 @@ This is a fast general relativistic ray-tracing engine built with Rust. The long
 
 All quantities are in geometrized units ($G=c=1$).
 
+## Installation
+
+### CLI
+
+```
+cargo install nullgeo-cli
+```
+
+This installs the `nullgeo` binary. Build with `--features parallel` to enable Rayon-based parallel ray tracing:
+
+```
+cargo install nullgeo-cli --features parallel
+```
+
+### Library
+
+```
+cargo add nullgeo
+```
+
+Or in `Cargo.toml`:
+
+```toml
+[dependencies]
+nullgeo = "0.1"
+```
+
+Enable the optional `parallel` feature for Rayon support: `nullgeo = { version = "0.1", features = ["parallel"] }`. 
+
 ## Example Usage (with CLI)
 
 ### e.g. Schwarzschild shadow, $512 \times 512$, camera at $x=-30$
 
 ```
-cargo run --release -- shadow \
+nullgeo shadow \
     --metric=schwarzschild \
     --mass=1.0 \
     --width=512 --height=512 \
