@@ -1,4 +1,4 @@
-use nullgeo_core::metric::{Mat4, Metric, Vec4};
+use crate::metric::{Mat4, Metric, Vec4};
 
 pub struct Minkowski;
 

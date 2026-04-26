@@ -1,15 +1,19 @@
 [package]
-name = "nullgeo-core"
+name = "nullgeo"
+description = "General-relativistic null-geodesic ray tracer (library)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "nullgeo-core"
+homepage.workspace = true
+readme.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [features]
 default = []
-parallel = ["dep:rayon"] 
+parallel = ["dep:rayon"]
 
 [dependencies]
 nalgebra.workspace = true

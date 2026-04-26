@@ -3,3 +3,7 @@
 .DS_Store
 .idea
 .vscode/*.log
+
+# CLI render outputs
+*.pgm
+*.ppm

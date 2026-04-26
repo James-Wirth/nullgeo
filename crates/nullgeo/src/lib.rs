@@ -7,6 +7,7 @@
 
 pub mod integrator;
 pub mod metric;
+pub mod metrics;
 pub mod ray;
 pub mod camera;
 

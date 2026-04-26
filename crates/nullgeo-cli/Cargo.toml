@@ -1,10 +1,15 @@
 [package]
 name = "nullgeo-cli"
+description = "Command-line ray tracer for null geodesics in arbitrary spacetimes"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "nullgeo-cli"
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+categories.workspace = true
+keywords.workspace = true
 
 [[bin]]
 name = "nullgeo"
@@ -12,11 +17,10 @@ path = "src/main.rs"
 
 [features]
 default = []
-parallel = ["nullgeo-core/parallel"]
+parallel = ["nullgeo/parallel"]
 
 [dependencies]
-nullgeo-core = { path = "../nullgeo-core" }
-nullgeo-metrics = { path = "../nullgeo-metrics" }
+nullgeo = { path = "../nullgeo", version = "0.1.0" }
 clap = { version = "4.5", features = ["derive"] }
 rayon = "1.10"
 env_logger = "0.11"

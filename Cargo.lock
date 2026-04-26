@@ -314,23 +314,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "61807f77802ff30975e01f4f071c8ba10c022052f98b3294119f3e615d13e5be"
 
 [[package]]
-name = "nullgeo-cli"
-version = "0.1.0"
-dependencies = [
- "assert_cmd",
- "clap",
- "env_logger",
- "log",
- "nullgeo-core",
- "nullgeo-metrics",
- "predicates",
- "rayon",
- "serde",
- "toml",
-]
-
-[[package]]
-name = "nullgeo-core"
+name = "nullgeo"
 version = "0.1.0"
 dependencies = [
  "approx",
@@ -340,10 +324,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "nullgeo-metrics"
+name = "nullgeo-cli"
 version = "0.1.0"
 dependencies = [
- "nullgeo-core",
+ "assert_cmd",
+ "clap",
+ "env_logger",
+ "log",
+ "nullgeo",
+ "predicates",
+ "rayon",
+ "serde",
+ "toml",
 ]
 
 [[package]]

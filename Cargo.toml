@@ -1,7 +1,6 @@
 [workspace]
 members = [
-  "crates/nullgeo-core",
-  "crates/nullgeo-metrics",
+  "crates/nullgeo",
   "crates/nullgeo-cli",
 ]
 resolver = "2"
@@ -13,10 +12,9 @@ edition = "2021"
 authors = ["James Wirth"]
 repository = "https://github.com/James-Wirth/nullgeo"
 homepage = "https://github.com/James-Wirth/nullgeo"
-documentation = "https://docs.rs/nullgeo-core"
 readme = "README.md"
-categories = ["physics"]
-keywords = ["relativity"]
+categories = ["science", "simulation"]
+keywords = ["relativity", "raytracing", "physics", "geodesics", "spacetime"]
 
 [workspace.lints.rust]
 unsafe_code = "deny"

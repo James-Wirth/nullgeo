@@ -2,11 +2,11 @@ mod io;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use rayon::prelude::*;
-use nullgeo_core::metric::{State4, Vec4, Mat4, Metric};
-use nullgeo_core::integrator::{rk4_step};
-use nullgeo_core::{Camera, CameraSpec};
-use nullgeo_metrics::minkowski::Minkowski;
-use nullgeo_metrics::schwarzschild::Schwarzschild;
+use nullgeo::metric::{State4, Vec4, Mat4, Metric};
+use nullgeo::integrator::{rk4_step};
+use nullgeo::{Camera, CameraSpec};
+use nullgeo::metrics::minkowski::Minkowski;
+use nullgeo::metrics::schwarzschild::Schwarzschild;
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 enum MetricKind { Minkowski, Schwarzschild }
