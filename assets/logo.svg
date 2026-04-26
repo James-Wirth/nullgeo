@@ -1,12 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 160" fill="none" role="img" aria-label="nullgeo">
   <title>nullgeo</title>
   <style>
-    .fg   { fill: #1f2937; }
-    .cone { stroke: #4f46e5; }
-    @media (prefers-color-scheme: dark) {
-      .fg   { fill: #f5f5f2; }
-      .cone { stroke: #a5b4fc; }
-    }
+    .fg   { fill: #6366f1; }
+    .cone { stroke: #6366f1; }
   </style>
 
   <g class="cone" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" fill="none">
