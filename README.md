@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="nullgeo" width="420">
+  <img src="https://raw.githubusercontent.com/James-Wirth/nullgeo/main/assets/logo.svg" alt="nullgeo" width="420">
 </p>
 
 ## About
