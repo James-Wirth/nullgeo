@@ -59,23 +59,25 @@ nullgeo shadow \
 
 The Hamiltonian for photons in GR is
 
-$H(x, p) = \frac{1}{2} g^{\mu \nu}(x) p_{\mu} p_{\nu}$
+```math
+H(x, p) = \tfrac{1}{2} g^{\mu\nu}(x) p_{\mu} p_{\nu}
+```
 
 together with the null constraint $H=0$. Hamilton's equations give the trajectory:
 
-$$
-\dot{x}^{\mu} = \frac{\partial H}{\partial p_{\mu}} = g^{\mu \nu} p_{\nu}, \quad 
-\dot{p}_{\mu} = -\frac{\partial H}{\partial x^{\mu}} = -\frac{1}{2} \partial_{\mu} g^{\rho \sigma} p_{\rho} p_{\sigma}
-$$
-where the dot signifies differentiation with respect to an affine parameter $\lambda$. 
+```math
+\dot{x}^{\mu} = \frac{\partial H}{\partial p_{\mu}} = g^{\mu\nu} p_{\nu}, \qquad \dot{p}_{\mu} = -\frac{\partial H}{\partial x^{\mu}} = -\tfrac{1}{2} \partial_{\mu} g^{\rho\sigma}\, p_{\rho} p_{\sigma}
+```
+
+where the dot signifies differentiation with respect to an affine parameter $\lambda$.
 
 ### Pinhole Camera and the Local Orthonormal Frame
 
-A local tetrad $\{ e^{\mu}_{a} \}$ is constructed at the camera's position. Note that the Latin $a$ in this notation labels the vector in the basis, and is not an index. 
+A local tetrad $\lbrace e_a^{\mu} \rbrace$ is constructed at the camera's position. Note that the Latin $a$ in this notation labels the vector in the basis, and is not an index.
 
-The spatial unit vectors $e^{\mu}_i$ are constructed by projecting the coordinate basis $\partial_i$ onto the 3-plane orthogonal to the timelike unit vector $e^{\mu}_0$ ($\sim u$) and carrying out Gram-Schmidt orthogonalization with the induced metric $h:= g + u \otimes u$ (see e.g. Wald). 
+The spatial unit vectors $e_i^{\mu}$ are constructed by projecting the coordinate basis $\partial_i$ onto the 3-plane orthogonal to the timelike unit vector $e_0^{\mu} \sim u$, and carrying out Gram-Schmidt orthogonalization with the induced metric $h := g + u \otimes u$ (see e.g. Wald).
 
-A photon with spatial direction $\mathbf{n}$ and energy $E$ in the local tetrad has four momentum $p^a = E(1, n^i)$. The covariant components in the coordinate basis can then be obtained via $p_{\mu} = g_{\mu \nu} {e_a}^{\nu} p^a$.
+A photon with spatial direction $\mathbf{n}$ and energy $E$ in the local tetrad has four momentum $p^{a} = E(1, n^{i})$. The covariant components in the coordinate basis can then be obtained via $p_{\mu} = g_{\mu\nu} e_{a}{}^{\nu} p^{a}$.
 
 ## Numerics
 
