@@ -1,6 +1,9 @@
 use crate::metric::{Mat4, Metric, Vec4};
+use crate::spacetime::Spacetime;
 
 pub struct Minkowski;
+
+impl Spacetime for Minkowski {}
 
 impl Metric for Minkowski {
     fn g(&self, _x: &Vec4) -> Mat4 {

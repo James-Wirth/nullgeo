@@ -1,8 +1,15 @@
 use crate::metric::{Mat4, Metric, Vec4};
+use crate::spacetime::Spacetime;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Schwarzschild {
     pub m: f64,
+}
+
+impl Spacetime for Schwarzschild {
+    fn is_captured(&self, x: &Vec4) -> bool {
+        self.radius(x) <= 2.0 * self.m * (1.0 + 1e-3)
+    }
 }
 
 impl Schwarzschild {

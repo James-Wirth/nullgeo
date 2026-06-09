@@ -11,10 +11,14 @@ pub mod integrator;
 pub mod metric;
 pub mod metrics;
 pub mod ray;
+pub mod spacetime;
+pub mod tracer;
 
 pub use camera::{Camera, CameraPose, CameraSpec};
 pub use metric::{Mat4, Metric, State4, Vec4};
 pub use ray::RayBundle;
+pub use spacetime::{RayAlignment, SkySide, Spacetime};
+pub use tracer::{trace, Termination, TraceConfig};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

@@ -103,10 +103,9 @@ fn minkowski_center_pixel_points_at_look_at() {
     let center = rays[4];
 
     let to_target = [2.0_f64 - (-10.0), -1.0 - 4.0, 3.0 - (-6.0)];
-    let len = (to_target[0] * to_target[0]
-        + to_target[1] * to_target[1]
-        + to_target[2] * to_target[2])
-        .sqrt();
+    let len =
+        (to_target[0] * to_target[0] + to_target[1] * to_target[1] + to_target[2] * to_target[2])
+            .sqrt();
 
     assert!((center.p[0] - 2.0).abs() < 1e-12);
     for (i, &target) in to_target.iter().enumerate() {

@@ -1,11 +1,10 @@
 mod io;
 
 use clap::{Parser, Subcommand, ValueEnum};
-use nullgeo::integrator::rk4_step;
-use nullgeo::metric::{Metric, Vec4};
+use nullgeo::metric::Vec4;
 use nullgeo::metrics::minkowski::Minkowski;
 use nullgeo::metrics::schwarzschild::Schwarzschild;
-use nullgeo::{Camera, CameraPose, CameraSpec};
+use nullgeo::{trace, Camera, CameraPose, CameraSpec, Spacetime, Termination, TraceConfig};
 use rayon::prelude::*;
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -114,21 +113,18 @@ fn main() {
                 }
             };
 
-            let r_h = 2.0 * mass;
-            let x_escape = 5.0 * r_h.max(1.0);
+            let cfg = TraceConfig {
+                dl_init: dl,
+                max_steps,
+                escape_radius: 4.0 * cam_x.abs().max(10.0 * mass.abs()),
+                ..TraceConfig::default()
+            };
 
             let result = match metric {
-                MetricKind::Minkowski => {
-                    shadow_image(&Minkowski, &camera, dl, max_steps, None, x_escape)
+                MetricKind::Minkowski => shadow_image(&Minkowski, &camera, &cfg),
+                MetricKind::Schwarzschild => {
+                    shadow_image(&Schwarzschild { m: mass }, &camera, &cfg)
                 }
-                MetricKind::Schwarzschild => shadow_image(
-                    &Schwarzschild { m: mass },
-                    &camera,
-                    dl,
-                    max_steps,
-                    Some(1.05 * r_h),
-                    x_escape,
-                ),
             };
 
             let img = match result {
@@ -148,37 +144,17 @@ fn main() {
     }
 }
 
-fn shadow_image<M: Metric + Sync>(
-    m: &M,
+fn shadow_image<S: Spacetime + Sync>(
+    spacetime: &S,
     camera: &Camera,
-    dl: f64,
-    max_steps: usize,
-    r_cap: Option<f64>,
-    x_escape: f64,
+    cfg: &TraceConfig,
 ) -> nullgeo::Result<Vec<u8>> {
-    let rays = camera.pixel_rays(m)?;
+    let rays = camera.pixel_rays(spacetime)?;
     let img = rays
         .into_par_iter()
-        .map(|mut s| {
-            let mut captured = false;
-            for _ in 0..max_steps {
-                s = rk4_step(m, &s, dl);
-                let r = (s.x[1] * s.x[1] + s.x[2] * s.x[2] + s.x[3] * s.x[3]).sqrt();
-                if let Some(rc) = r_cap {
-                    if r < rc {
-                        captured = true;
-                        break;
-                    }
-                }
-                if s.x[1] > x_escape || r > 1.0e6 {
-                    break;
-                }
-            }
-            if captured {
-                0u8
-            } else {
-                255u8
-            }
+        .map(|ray| match trace(spacetime, ray, cfg) {
+            Termination::Escaped { .. } => 255u8,
+            _ => 0u8,
         })
         .collect();
     Ok(img)
