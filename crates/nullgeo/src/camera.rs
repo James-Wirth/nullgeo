@@ -13,7 +13,9 @@ pub struct Camera {
 }
 
 impl Camera {
-    pub fn from_spec(spec: CameraSpec) -> Self { Self { spec } }
+    pub fn from_spec(spec: CameraSpec) -> Self {
+        Self { spec }
+    }
 
     pub fn generate_directions(&self) -> Vec<[f64; 3]> {
         let (w, h) = self.spec.res;
@@ -43,7 +45,7 @@ impl Camera {
                 let sy = u;
                 let sz = v;
 
-                let inv_norm = 1.0 / (sx*sx + sy*sy + sz*sz).sqrt();
+                let inv_norm = 1.0 / (sx * sx + sy * sy + sz * sz).sqrt();
                 dirs.push([sx * inv_norm, sy * inv_norm, sz * inv_norm]);
             }
         }
@@ -54,7 +56,7 @@ impl Camera {
         let e = self.spec.energy.max(1e-12);
         self.generate_directions()
             .into_iter()
-            .map(|[nx, ny, nz]| Vec4::new(-e, e*nx, e*ny, e*nz))
+            .map(|[nx, ny, nz]| Vec4::new(-e, e * nx, e * ny, e * nz))
             .collect()
     }
 }

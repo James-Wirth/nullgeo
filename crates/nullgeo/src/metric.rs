@@ -11,7 +11,25 @@ pub struct State4 {
 
 pub trait Metric {
     fn g(&self, x: &Vec4) -> Mat4;
+
     fn g_inv(&self, x: &Vec4) -> Mat4;
-    fn gamma(&self, _x: &Vec4) -> Option<[[[f64; 4]; 4]; 4]> { None }
-    fn dg_inv(&self, _x: &Vec4) -> Option<[Mat4; 4]> { None }
+
+    fn dg_inv(&self, x: &Vec4) -> [Mat4; 4] {
+        fd_dg_inv(|y| self.g_inv(y), x)
+    }
+}
+
+pub fn fd_dg_inv<F: Fn(&Vec4) -> Mat4>(f: F, x: &Vec4) -> [Mat4; 4] {
+    const H0: f64 = 7e-4;
+    let mut out = [Mat4::zeros(); 4];
+    for mu in 0..4 {
+        let h = H0 * (1.0 + x[mu].abs());
+        let at = |s: f64| {
+            let mut y = *x;
+            y[mu] += s * h;
+            f(&y)
+        };
+        out[mu] = (at(-2.0) - at(2.0) + 8.0 * (at(1.0) - at(-1.0))) / (12.0 * h);
+    }
+    out
 }
