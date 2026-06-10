@@ -1,5 +1,6 @@
 use nullgeo::metric::{fd_dg_inv, Mat4, Metric, Vec4};
 use nullgeo::metrics::minkowski::Minkowski;
+use nullgeo::metrics::reissner_nordstrom::ReissnerNordstrom;
 use nullgeo::metrics::schwarzschild::Schwarzschild;
 
 fn sample_points() -> Vec<Vec4> {
@@ -42,6 +43,60 @@ fn metric_times_inverse_is_identity() {
             &format!("schwarzschild g*g_inv at {x:?}"),
         );
     }
+}
+
+#[test]
+fn reissner_nordstrom_metric_times_inverse_is_identity() {
+    let rn = ReissnerNordstrom::new(1.0, 0.8).unwrap();
+    for x in sample_points() {
+        let prod = rn.g(&x) * rn.g_inv(&x);
+        assert_mat_close(
+            &prod,
+            &Mat4::identity(),
+            1e-12,
+            &format!("reissner-nordstrom g*g_inv at {x:?}"),
+        );
+    }
+}
+
+#[test]
+fn reissner_nordstrom_fd_matches_analytic_dg_inv() {
+    let rn = ReissnerNordstrom::new(1.0, 0.8).unwrap();
+    for x in sample_points() {
+        let analytic = rn.dg_inv(&x);
+        let fd = fd_dg_inv(|y| rn.g_inv(y), &x);
+        let scale = analytic.iter().map(|m| m.amax()).fold(1.0_f64, f64::max);
+        for (mu, fd_mu) in fd.iter().enumerate() {
+            assert_mat_close(
+                fd_mu,
+                &analytic[mu],
+                1e-7 * scale,
+                &format!("rn dg_inv[{mu}] at {x:?}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn reissner_nordstrom_with_zero_charge_matches_schwarzschild() {
+    let rn = ReissnerNordstrom::new(1.0, 0.0).unwrap();
+    let schw = Schwarzschild { m: 1.0 };
+    for x in sample_points() {
+        assert_mat_close(&rn.g(&x), &schw.g(&x), 1e-12, &format!("rn g at {x:?}"));
+        assert_mat_close(
+            &rn.g_inv(&x),
+            &schw.g_inv(&x),
+            1e-12,
+            &format!("rn g_inv at {x:?}"),
+        );
+    }
+}
+
+#[test]
+fn reissner_nordstrom_rejects_overcharged_black_hole() {
+    assert!(ReissnerNordstrom::new(1.0, 1.2).is_err());
+    assert!(ReissnerNordstrom::new(1.0, -1.2).is_err());
+    assert!(ReissnerNordstrom::new(1.0, 1.0).is_ok());
 }
 
 #[test]

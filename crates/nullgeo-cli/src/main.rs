@@ -2,7 +2,9 @@ mod io;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use nullgeo::metric::Vec4;
+use nullgeo::metrics::kerr::Kerr;
 use nullgeo::metrics::minkowski::Minkowski;
+use nullgeo::metrics::reissner_nordstrom::ReissnerNordstrom;
 use nullgeo::metrics::schwarzschild::Schwarzschild;
 use nullgeo::{trace, Camera, CameraPose, CameraSpec, Spacetime, Termination, TraceConfig};
 use rayon::prelude::*;
@@ -11,6 +13,8 @@ use rayon::prelude::*;
 enum MetricKind {
     Minkowski,
     Schwarzschild,
+    ReissnerNordstrom,
+    Kerr,
 }
 
 #[derive(Parser, Debug)]
@@ -49,6 +53,10 @@ enum Command {
         metric: MetricKind,
         #[arg(long, default_value_t = 1.0)]
         mass: f64,
+        #[arg(long, default_value_t = 0.0)]
+        spin: f64,
+        #[arg(long, default_value_t = 0.0)]
+        charge: f64,
         #[arg(long, default_value_t = 256)]
         width: usize,
         #[arg(long, default_value_t = 256)]
@@ -85,6 +93,8 @@ fn main() {
         Command::Shadow {
             metric,
             mass,
+            spin,
+            charge,
             width,
             height,
             fov_deg,
@@ -125,6 +135,14 @@ fn main() {
                 MetricKind::Schwarzschild => {
                     shadow_image(&Schwarzschild { m: mass }, &camera, &cfg)
                 }
+                MetricKind::ReissnerNordstrom => match ReissnerNordstrom::new(mass, charge) {
+                    Ok(rn) => shadow_image(&rn, &camera, &cfg),
+                    Err(e) => exit_invalid_metric(e),
+                },
+                MetricKind::Kerr => match Kerr::new(mass, spin) {
+                    Ok(kerr) => shadow_image(&kerr, &camera, &cfg),
+                    Err(e) => exit_invalid_metric(e),
+                },
             };
 
             let img = match result {
@@ -142,6 +160,11 @@ fn main() {
             }
         }
     }
+}
+
+fn exit_invalid_metric(e: nullgeo::Error) -> ! {
+    eprintln!("invalid metric: {e}");
+    std::process::exit(1)
 }
 
 fn shadow_image<S: Spacetime + Sync>(
