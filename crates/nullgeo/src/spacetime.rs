@@ -1,3 +1,4 @@
+use crate::frame::metric_dot;
 use crate::metric::{Metric, State4, Vec4};
 use nalgebra::{Matrix3, Vector3};
 
@@ -61,5 +62,19 @@ pub trait Spacetime: Metric {
 
     fn align_ray(&self, s: State4) -> (State4, RayAlignment) {
         (s, RayAlignment::identity())
+    }
+
+    fn isco_radius(&self) -> Option<f64> {
+        None
+    }
+
+    fn disk_emitter(&self, _x: &Vec4) -> Option<Vec4> {
+        None
+    }
+
+    fn circular_emitter(&self, x: &Vec4, omega: f64) -> Option<Vec4> {
+        let u = Vec4::new(1.0, -omega * x[2], omega * x[1], 0.0);
+        let norm_sq = metric_dot(&self.g(x), &u, &u);
+        (norm_sq < 0.0).then(|| u / (-norm_sq).sqrt())
     }
 }

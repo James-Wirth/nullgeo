@@ -1,21 +1,15 @@
 mod io;
+mod scene_file;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use std::path::Path;
+
+use clap::{Args, Parser, Subcommand};
 use nullgeo::metric::Vec4;
-use nullgeo::metrics::kerr::Kerr;
-use nullgeo::metrics::minkowski::Minkowski;
-use nullgeo::metrics::reissner_nordstrom::ReissnerNordstrom;
-use nullgeo::metrics::schwarzschild::Schwarzschild;
-use nullgeo::{trace, Camera, CameraPose, CameraSpec, Spacetime, Termination, TraceConfig};
-use rayon::prelude::*;
-
-#[derive(Copy, Clone, Debug, ValueEnum)]
-enum MetricKind {
-    Minkowski,
-    Schwarzschild,
-    ReissnerNordstrom,
-    Kerr,
-}
+use nullgeo::{render, tone_map, Camera, CameraPose, CameraSpec, Scene, SkyMap, TraceConfig};
+use scene_file::{
+    build_camera, build_disk, build_sky, build_spacetime, build_trace_config, MetricKind,
+    MetricSection, OutputFormat, SceneFile,
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "nullgeo", about = "nullgeo - general relativistic ray tracing")]
@@ -34,151 +28,150 @@ enum Command {
     },
 
     Render {
-        #[arg(long, default_value_t = 32)]
-        width: usize,
-        #[arg(long, default_value_t = 32)]
-        height: usize,
-        #[arg(long, default_value_t = 20.0)]
-        fov_deg: f64,
-        #[arg(long, default_value_t = 1.0)]
-        energy: f64,
-        #[arg(long, default_value_t = 0)]
-        steps: usize,
-        #[arg(long, default_value_t = 0.05)]
-        dl: f64,
+        scene: String,
     },
 
-    Shadow {
-        #[arg(long, value_enum, default_value_t=MetricKind::Schwarzschild)]
-        metric: MetricKind,
-        #[arg(long, default_value_t = 1.0)]
-        mass: f64,
-        #[arg(long, default_value_t = 0.0)]
-        spin: f64,
-        #[arg(long, default_value_t = 0.0)]
-        charge: f64,
-        #[arg(long, default_value_t = 256)]
-        width: usize,
-        #[arg(long, default_value_t = 256)]
-        height: usize,
-        #[arg(long, default_value_t = 20.0)]
-        fov_deg: f64,
-        #[arg(long, default_value_t=-15.0)]
-        cam_x: f64,
-        #[arg(long, default_value_t = 1.0)]
-        energy: f64,
-        #[arg(long, default_value_t = 0.01)]
-        dl: f64,
-        #[arg(long, default_value_t = 5000)]
-        max_steps: usize,
-        #[arg(long, default_value = "shadow.ppm")]
-        out: String,
-    },
+    Shadow(ShadowArgs),
+}
+
+#[derive(Args, Debug)]
+struct ShadowArgs {
+    #[arg(long, value_enum, default_value_t = MetricKind::Schwarzschild)]
+    metric: MetricKind,
+    #[arg(long, default_value_t = 1.0)]
+    mass: f64,
+    #[arg(long, default_value_t = 0.0)]
+    spin: f64,
+    #[arg(long, default_value_t = 0.0)]
+    charge: f64,
+    #[arg(long, default_value_t = 1.0)]
+    b0: f64,
+    #[arg(long, default_value_t = 256)]
+    width: usize,
+    #[arg(long, default_value_t = 256)]
+    height: usize,
+    #[arg(long, default_value_t = 20.0)]
+    fov_deg: f64,
+    #[arg(long, default_value_t=-15.0)]
+    cam_x: f64,
+    #[arg(long, default_value_t = 1.0)]
+    energy: f64,
+    #[arg(long, default_value_t = 0.01)]
+    dl: f64,
+    #[arg(long, default_value_t = 5000)]
+    max_steps: usize,
+    #[arg(long, default_value = "shadow.ppm")]
+    out: String,
 }
 
 fn main() {
     env_logger::init();
     let cli = Cli::parse();
 
-    match cli.command {
-        Command::Propagate { .. } => {
-            eprintln!("'propagate' not yet written");
-            std::process::exit(1);
-        }
-        Command::Render { .. } => {
-            eprintln!("'render' not yet written");
-            std::process::exit(1);
-        }
+    let result = match cli.command {
+        Command::Propagate { .. } => Err("'propagate' not yet written".to_string()),
+        Command::Render { scene } => run_render(&scene),
+        Command::Shadow(args) => run_shadow(&args),
+    };
 
-        Command::Shadow {
-            metric,
-            mass,
-            spin,
-            charge,
-            width,
-            height,
-            fov_deg,
-            cam_x,
-            energy,
-            dl,
-            max_steps,
-            out,
-        } => {
-            let camera = match Camera::new(
-                CameraSpec {
-                    fov_deg,
-                    res: (width, height),
-                    energy,
-                },
-                CameraPose {
-                    position: Vec4::new(0.0, cam_x, 0.0, 0.0),
-                    look_at: [0.0, 0.0, 0.0],
-                    up: [0.0, 0.0, 1.0],
-                },
-            ) {
-                Ok(camera) => camera,
-                Err(e) => {
-                    eprintln!("invalid camera: {e}");
-                    std::process::exit(1);
-                }
-            };
-
-            let cfg = TraceConfig {
-                dl_init: dl,
-                max_steps,
-                escape_radius: 4.0 * cam_x.abs().max(10.0 * mass.abs()),
-                ..TraceConfig::default()
-            };
-
-            let result = match metric {
-                MetricKind::Minkowski => shadow_image(&Minkowski, &camera, &cfg),
-                MetricKind::Schwarzschild => {
-                    shadow_image(&Schwarzschild { m: mass }, &camera, &cfg)
-                }
-                MetricKind::ReissnerNordstrom => match ReissnerNordstrom::new(mass, charge) {
-                    Ok(rn) => shadow_image(&rn, &camera, &cfg),
-                    Err(e) => exit_invalid_metric(e),
-                },
-                MetricKind::Kerr => match Kerr::new(mass, spin) {
-                    Ok(kerr) => shadow_image(&kerr, &camera, &cfg),
-                    Err(e) => exit_invalid_metric(e),
-                },
-            };
-
-            let img = match result {
-                Ok(img) => img,
-                Err(e) => {
-                    eprintln!("trace failed: {e}");
-                    std::process::exit(1);
-                }
-            };
-
-            if let Err(e) = io::write_ppm_gray(&out, width, height, &img) {
-                eprintln!("Failed to write {}: {}", out, e);
-            } else {
-                println!("Wrote {}", out);
-            }
-        }
+    if let Err(e) = result {
+        eprintln!("{e}");
+        std::process::exit(1);
     }
 }
 
-fn exit_invalid_metric(e: nullgeo::Error) -> ! {
-    eprintln!("invalid metric: {e}");
-    std::process::exit(1)
+fn run_render(path: &str) -> Result<(), String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
+    let file: SceneFile =
+        toml::from_str(&text).map_err(|e| format!("invalid scene file {path}: {e}"))?;
+    let base = Path::new(path).parent().unwrap_or(Path::new("."));
+
+    let spacetime = build_spacetime(&file.metric)?;
+    let camera = build_camera(&file.camera)?;
+    let scene = Scene {
+        sky: build_sky(&file.sky, base)?,
+        sky_secondary: file
+            .sky_secondary
+            .as_ref()
+            .map(|s| build_sky(s, base))
+            .transpose()?,
+        disk: file.disk.as_ref().map(build_disk),
+    };
+    let cfg = build_trace_config(&file.integrator, file.camera.position);
+
+    let img = render(spacetime.as_ref(), &camera, &scene, &cfg).map_err(|e| e.to_string())?;
+    let pixels = tone_map(&img, file.output.exposure);
+
+    let out = &file.output.path;
+    match file.output.resolved_format() {
+        OutputFormat::Png => {
+            let flat: Vec<u8> = pixels.iter().flatten().copied().collect();
+            image::save_buffer(
+                out,
+                &flat,
+                img.width as u32,
+                img.height as u32,
+                image::ExtendedColorType::Rgb8,
+            )
+            .map_err(|e| format!("failed to write {}: {e}", out.display()))?;
+        }
+        OutputFormat::Ppm => {
+            let path_str = out
+                .to_str()
+                .ok_or_else(|| format!("non-utf8 output path {}", out.display()))?;
+            io::write_ppm_rgb(path_str, img.width, img.height, &pixels)
+                .map_err(|e| format!("failed to write {}: {e}", out.display()))?;
+        }
+    }
+    println!("Wrote {}", out.display());
+    Ok(())
 }
 
-fn shadow_image<S: Spacetime + Sync>(
-    spacetime: &S,
-    camera: &Camera,
-    cfg: &TraceConfig,
-) -> nullgeo::Result<Vec<u8>> {
-    let rays = camera.pixel_rays(spacetime)?;
-    let img = rays
-        .into_par_iter()
-        .map(|ray| match trace(spacetime, ray, cfg) {
-            Termination::Escaped { .. } => 255u8,
-            _ => 0u8,
-        })
+fn run_shadow(args: &ShadowArgs) -> Result<(), String> {
+    let camera = Camera::new(
+        CameraSpec {
+            fov_deg: args.fov_deg,
+            res: (args.width, args.height),
+            energy: args.energy,
+        },
+        CameraPose {
+            position: Vec4::new(0.0, args.cam_x, 0.0, 0.0),
+            look_at: [0.0, 0.0, 0.0],
+            up: [0.0, 0.0, 1.0],
+        },
+    )
+    .map_err(|e| format!("invalid camera: {e}"))?;
+
+    let cfg = TraceConfig {
+        dl_init: args.dl,
+        max_steps: args.max_steps,
+        escape_radius: 4.0 * args.cam_x.abs().max(10.0 * args.mass.abs()),
+        ..TraceConfig::default()
+    };
+
+    let spacetime = build_spacetime(&MetricSection {
+        kind: args.metric,
+        mass: args.mass,
+        spin: args.spin,
+        charge: args.charge,
+        b0: args.b0,
+    })?;
+
+    let scene = Scene {
+        sky: SkyMap::Uniform([1.0; 3]),
+        sky_secondary: None,
+        disk: None,
+    };
+    let img = render(spacetime.as_ref(), &camera, &scene, &cfg)
+        .map_err(|e| format!("trace failed: {e}"))?;
+    let gray: Vec<u8> = img
+        .data
+        .iter()
+        .map(|c| if c[0] > 0.5 { 255 } else { 0 })
         .collect();
-    Ok(img)
+
+    io::write_ppm_gray(&args.out, args.width, args.height, &gray)
+        .map_err(|e| format!("failed to write {}: {e}", args.out))?;
+    println!("Wrote {}", args.out);
+    Ok(())
 }

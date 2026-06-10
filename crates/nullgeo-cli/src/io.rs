@@ -20,3 +20,25 @@ pub fn write_ppm_gray(
     f.write_all(pixels)?;
     Ok(())
 }
+
+pub fn write_ppm_rgb(
+    path: &str,
+    width: usize,
+    height: usize,
+    pixels: &[[u8; 3]],
+) -> std::io::Result<()> {
+    if pixels.len() != width * height {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "pixel buffer size mismatch",
+        ));
+    }
+    let mut f = BufWriter::new(File::create(path)?);
+    writeln!(f, "P6")?;
+    writeln!(f, "{} {}", width, height)?;
+    writeln!(f, "255")?;
+    for px in pixels {
+        f.write_all(px)?;
+    }
+    Ok(())
+}

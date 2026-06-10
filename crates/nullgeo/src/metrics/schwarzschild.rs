@@ -11,6 +11,15 @@ impl Spacetime for Schwarzschild {
     fn is_captured(&self, x: &Vec4) -> bool {
         self.radius(x) <= 2.0 * self.m * (1.0 + 1e-3)
     }
+
+    fn isco_radius(&self) -> Option<f64> {
+        Some(6.0 * self.m)
+    }
+
+    fn disk_emitter(&self, x: &Vec4) -> Option<Vec4> {
+        let r = self.radius(x);
+        self.circular_emitter(x, (self.m / (r * r * r)).sqrt())
+    }
 }
 
 impl Metric for Schwarzschild {

@@ -63,6 +63,22 @@ impl Spacetime for Kerr {
     fn is_captured(&self, x: &Vec4) -> bool {
         self.radius(x) <= self.outer_horizon() * (1.0 + 1e-3)
     }
+
+    fn isco_radius(&self) -> Option<f64> {
+        let chi = self.a / self.m;
+        let z1 = 1.0 + (1.0 - chi * chi).cbrt() * ((1.0 + chi).cbrt() + (1.0 - chi).cbrt());
+        let z2 = (3.0 * chi * chi + z1 * z1).sqrt();
+        let branch = ((3.0 - z1) * (3.0 + z1 + 2.0 * z2)).max(0.0).sqrt();
+        Some(self.m * (3.0 + z2 - branch))
+    }
+
+    fn disk_emitter(&self, x: &Vec4) -> Option<Vec4> {
+        let r = self.radius(x);
+        let sqrt_m = self.m.sqrt();
+        let sense = if self.a >= 0.0 { 1.0 } else { -1.0 };
+        let omega = sense * sqrt_m / (r.powf(1.5) + self.a.abs() * sqrt_m);
+        self.circular_emitter(x, omega)
+    }
 }
 
 impl Metric for Kerr {

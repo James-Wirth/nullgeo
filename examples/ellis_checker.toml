@@ -1,0 +1,21 @@
+[metric]
+kind = "ellis"
+b0 = 1.0
+
+[camera]
+position = [12.0, 1.5707963267948966, 0.0]
+look_at = [0.0, 0.0, 0.0]
+up = [0.0, 0.0, 1.0]
+fov_deg = 50.0
+width = 640
+height = 480
+
+[sky]
+checker_deg = 12.0
+
+[sky_secondary]
+checker_deg = 30.0
+
+[output]
+path = "ellis_checker.png"
+exposure = 1.0

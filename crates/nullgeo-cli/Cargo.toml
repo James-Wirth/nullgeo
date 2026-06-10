@@ -19,17 +19,17 @@ name = "nullgeo"
 path = "src/main.rs"
 
 [features]
-default = []
+default = ["parallel"]
 parallel = ["nullgeo/parallel"]
 
 [dependencies]
 nullgeo = { path = "../nullgeo", version = "0.1.1" }
 clap = { version = "4.5", features = ["derive"] }
-rayon = "1.10"
 env_logger = "0.11"
 log = "0.4"
 serde.workspace = true
 toml.workspace = true
+image.workspace = true
 
 [dev-dependencies]
 assert_cmd = "2.0"

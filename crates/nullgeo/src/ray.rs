@@ -43,10 +43,7 @@ impl RayBundle {
 
 #[cfg(feature = "parallel")]
 impl RayBundle {
-    pub fn step_par<M: Metric + Sync>(&mut self, m: &M, dl: f64)
-    where
-        M: Send,
-    {
+    pub fn step_par<M: Metric + Sync + Send>(&mut self, m: &M, dl: f64) {
         use rayon::prelude::*;
         let next: Vec<_> = (0..self.len())
             .into_par_iter()
