@@ -1,5 +1,6 @@
 use crate::frame::{build_coframe_seeded, make_null_covector};
-use crate::metric::{Metric, State4, Vec4};
+use crate::metric::{State4, Vec4};
+use crate::spacetime::Spacetime;
 use crate::{Error, Result};
 
 #[derive(Clone, Copy, Debug)]
@@ -55,16 +56,11 @@ impl Camera {
             return Err(Error::InvalidArg("energy must be positive".into()));
         }
         let camera = Self { spec, pose };
-        camera.view_basis()?;
+        camera.view_basis([pose.position[1], pose.position[2], pose.position[3]])?;
         Ok(camera)
     }
 
-    fn view_basis(&self) -> Result<[[f64; 3]; 3]> {
-        let position = [
-            self.pose.position[1],
-            self.pose.position[2],
-            self.pose.position[3],
-        ];
+    fn view_basis(&self, position: [f64; 3]) -> Result<[[f64; 3]; 3]> {
         let forward = normalized(sub(self.pose.look_at, position))
             .ok_or_else(|| Error::InvalidArg("look_at coincides with position".into()))?;
         let right = normalized(cross(forward, self.pose.up))
@@ -91,11 +87,11 @@ impl Camera {
         dirs
     }
 
-    pub fn pixel_rays<M: Metric + ?Sized>(&self, m: &M) -> Result<Vec<State4>> {
-        let [forward, right, up] = self.view_basis()?;
-        let seed = |d: [f64; 3]| Vec4::new(0.0, d[0], d[1], d[2]);
+    pub fn pixel_rays<S: Spacetime + ?Sized>(&self, s: &S) -> Result<Vec<State4>> {
+        let [forward, right, up] = self.view_basis(s.cartesian_position(&self.pose.position))?;
+        let seed = |d: [f64; 3]| s.chart_direction(&self.pose.position, d);
         let coframe = build_coframe_seeded(
-            m,
+            s,
             &self.pose.position,
             [seed(forward), seed(right), seed(up)],
         )?;

@@ -1,3 +1,4 @@
+pub mod ellis;
 pub mod kerr;
 pub mod kerr_schild;
 pub mod minkowski;

@@ -41,6 +41,10 @@ pub trait Spacetime: Metric {
         self.cartesian_position(x)[2]
     }
 
+    fn chart_direction(&self, _x: &Vec4, d: [f64; 3]) -> Vec4 {
+        Vec4::new(0.0, d[0], d[1], d[2])
+    }
+
     fn cartesian_direction(&self, s: &State4) -> [f64; 3] {
         let v = self.g_inv(&s.x) * s.p;
         let len = (v[1] * v[1] + v[2] * v[2] + v[3] * v[3]).sqrt().max(1e-300);
