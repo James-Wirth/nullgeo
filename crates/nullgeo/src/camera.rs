@@ -8,6 +8,7 @@ pub struct CameraSpec {
     pub fov_deg: f64,
     pub res: (usize, usize),
     pub energy: f64,
+    pub supersample: usize,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -56,6 +57,9 @@ impl Camera {
         if spec.energy <= 0.0 {
             return Err(Error::InvalidArg("energy must be positive".into()));
         }
+        if spec.supersample == 0 {
+            return Err(Error::InvalidArg("supersample must be at least 1".into()));
+        }
         if pose.velocity.iter().any(|c| !c.is_finite()) {
             return Err(Error::InvalidArg("velocity must be finite".into()));
         }
@@ -74,6 +78,10 @@ impl Camera {
     }
 
     pub fn pixel_directions(&self) -> Vec<[f64; 3]> {
+        self.pixel_directions_at((0.5, 0.5))
+    }
+
+    pub fn pixel_directions_at(&self, subpixel: (f64, f64)) -> Vec<[f64; 3]> {
         let (w, h) = self.spec.res;
         let aspect = w as f64 / h as f64;
         let scale_u = (0.5 * self.spec.fov_deg.to_radians()).tan();
@@ -81,14 +89,22 @@ impl Camera {
 
         let mut dirs = Vec::with_capacity(w * h);
         for j in 0..h {
-            let v = (1.0 - 2.0 * ((j as f64 + 0.5) / h as f64)) * scale_v;
+            let v = (1.0 - 2.0 * ((j as f64 + subpixel.1) / h as f64)) * scale_v;
             for i in 0..w {
-                let u = (2.0 * ((i as f64 + 0.5) / w as f64) - 1.0) * scale_u;
+                let u = (2.0 * ((i as f64 + subpixel.0) / w as f64) - 1.0) * scale_u;
                 let inv_norm = 1.0 / (1.0 + u * u + v * v).sqrt();
                 dirs.push([inv_norm, u * inv_norm, v * inv_norm]);
             }
         }
         dirs
+    }
+
+    pub fn subpixel_offsets(&self) -> Vec<(f64, f64)> {
+        let n = self.spec.supersample;
+        let centered = |k: usize| (k as f64 + 0.5) / n as f64;
+        (0..n * n)
+            .map(|k| (centered(k % n), centered(k / n)))
+            .collect()
     }
 
     pub fn observer_four_velocity<M: Metric + ?Sized>(&self, m: &M) -> Result<Vec4> {
@@ -102,6 +118,14 @@ impl Camera {
     }
 
     pub fn pixel_rays<S: Spacetime + ?Sized>(&self, s: &S) -> Result<Vec<State4>> {
+        self.pixel_rays_at(s, (0.5, 0.5))
+    }
+
+    pub fn pixel_rays_at<S: Spacetime + ?Sized>(
+        &self,
+        s: &S,
+        subpixel: (f64, f64),
+    ) -> Result<Vec<State4>> {
         let [forward, right, up] = self.view_basis(s.cartesian_position(&self.pose.position))?;
         let observer = self.observer_four_velocity(s)?;
         let seed = |d: [f64; 3]| s.chart_direction(&self.pose.position, d);
@@ -114,7 +138,7 @@ impl Camera {
 
         let energy = self.spec.energy;
         let rays = self
-            .pixel_directions()
+            .pixel_directions_at(subpixel)
             .into_iter()
             .map(|[f, r, u]| {
                 let arriving = make_null_covector(&coframe, [-f, -r, -u], energy);

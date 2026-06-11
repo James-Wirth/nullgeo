@@ -63,6 +63,8 @@ pub struct CameraSection {
     pub fov_deg: f64,
     pub width: usize,
     pub height: usize,
+    #[serde(default = "one_usize")]
+    pub supersample: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,17 +125,20 @@ pub enum OutputFormat {
 
 impl OutputSection {
     pub fn resolved_format(&self) -> OutputFormat {
-        self.format.unwrap_or(
-            match self.path.extension().and_then(|e| e.to_str()) {
+        self.format
+            .unwrap_or(match self.path.extension().and_then(|e| e.to_str()) {
                 Some("ppm") => OutputFormat::Ppm,
                 _ => OutputFormat::Png,
-            },
-        )
+            })
     }
 }
 
 fn one() -> f64 {
     1.0
+}
+
+fn one_usize() -> usize {
+    1
 }
 
 fn default_up() -> [f64; 3] {
@@ -183,6 +188,7 @@ pub fn build_camera(c: &CameraSection) -> Result<Camera, String> {
             fov_deg: c.fov_deg,
             res: (c.width, c.height),
             energy: 1.0,
+            supersample: c.supersample,
         },
         CameraPose {
             position: Vec4::new(0.0, c.position[0], c.position[1], c.position[2]),
@@ -285,6 +291,7 @@ mod tests {
             fov_deg = 25.0
             width = 64
             height = 48
+            supersample = 2
 
             [disk]
             r_in = 7.0
@@ -315,10 +322,17 @@ mod tests {
         assert_eq!(file.metric.spin, 2.5);
         assert_eq!(file.camera.fov_deg, 25.0);
         assert_eq!(file.camera.width, 64);
+        assert_eq!(file.camera.supersample, 2);
         let disk = file.disk.unwrap();
         assert_eq!(disk.r_in, 7.0);
         assert_eq!(disk.g_power, 4.0);
-        assert!(matches!(file.sky_secondary, Some(SkySection { uniform: Some(_), .. })));
+        assert!(matches!(
+            file.sky_secondary,
+            Some(SkySection {
+                uniform: Some(_),
+                ..
+            })
+        ));
         assert_eq!(file.integrator.tol, 1e-10);
         assert_eq!(file.integrator.escape_radius, Some(300.0));
         assert_eq!(file.output.resolved_format(), OutputFormat::Ppm);
@@ -353,6 +367,8 @@ mod tests {
         assert_eq!(file.metric.mass, 1.0);
         assert_eq!(file.camera.fov_deg, 60.0);
         assert_eq!(file.camera.up, [0.0, 0.0, 1.0]);
+        assert_eq!(file.camera.velocity, [0.0; 3]);
+        assert_eq!(file.camera.supersample, 1);
         assert_eq!(file.integrator.tol, 1e-9);
         assert_eq!(file.integrator.max_steps, 100_000);
         assert_eq!(file.output.resolved_format(), OutputFormat::Png);

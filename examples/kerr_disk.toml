@@ -10,6 +10,7 @@ up = [0.0, 0.0, 1.0]
 fov_deg = 24.0
 width = 640
 height = 360
+supersample = 3
 
 [disk]
 r_out = 18.0

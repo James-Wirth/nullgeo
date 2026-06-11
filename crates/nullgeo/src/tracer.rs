@@ -1,4 +1,4 @@
-use crate::integrator::{rk4_step, rk45_step, StepResult, Tolerances};
+use crate::integrator::{rk45_step, rk4_step, StepResult, Tolerances};
 use crate::metric::State4;
 use crate::spacetime::{SkySide, Spacetime};
 

@@ -34,8 +34,7 @@ impl SkyMap {
             SkyMap::Uniform(color) => *color,
             SkyMap::Checker { angular_size_deg } => {
                 let cell = angular_size_deg.to_radians();
-                let index =
-                    (theta / cell).floor() as i64 + (phi / cell).floor() as i64;
+                let index = (theta / cell).floor() as i64 + (phi / cell).floor() as i64;
                 if index.rem_euclid(2) == 0 {
                     CHECKER_LIGHT
                 } else {

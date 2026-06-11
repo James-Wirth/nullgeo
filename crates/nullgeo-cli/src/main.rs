@@ -4,6 +4,7 @@ mod scene_file;
 use std::path::Path;
 
 use clap::{Args, Parser, Subcommand};
+use nullgeo::integrator::{hamiltonian, rk45_step, Tolerances};
 use nullgeo::metric::Vec4;
 use nullgeo::{render, tone_map, Camera, CameraPose, CameraSpec, Scene, SkyMap, TraceConfig};
 use scene_file::{
@@ -20,18 +21,49 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    Propagate {
-        #[arg(long, default_value_t = 0.1)]
-        dl: f64,
-        #[arg(long, default_value_t = 10)]
-        steps: usize,
-    },
+    Propagate(PropagateArgs),
 
-    Render {
-        scene: String,
-    },
+    Render { scene: String },
 
     Shadow(ShadowArgs),
+}
+
+#[derive(Args, Debug)]
+struct PropagateArgs {
+    #[arg(long, value_enum, default_value_t = MetricKind::Schwarzschild)]
+    metric: MetricKind,
+    #[arg(long, default_value_t = 1.0)]
+    mass: f64,
+    #[arg(long, default_value_t = 0.0)]
+    spin: f64,
+    #[arg(long, default_value_t = 0.0)]
+    charge: f64,
+    #[arg(long, default_value_t = 1.0)]
+    b0: f64,
+    #[arg(
+        long,
+        required = true,
+        value_delimiter = ',',
+        allow_hyphen_values = true
+    )]
+    pos: Vec<f64>,
+    #[arg(
+        long,
+        required = true,
+        value_delimiter = ',',
+        allow_hyphen_values = true
+    )]
+    dir: Vec<f64>,
+    #[arg(long, default_value_t = 1.0)]
+    energy: f64,
+    #[arg(long, default_value_t = 1e-9)]
+    tol: f64,
+    #[arg(long, default_value_t = 100_000)]
+    max_steps: usize,
+    #[arg(long)]
+    escape_radius: Option<f64>,
+    #[arg(long)]
+    out: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -69,7 +101,7 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Command::Propagate { .. } => Err("'propagate' not yet written".to_string()),
+        Command::Propagate(args) => run_propagate(&args),
         Command::Render { scene } => run_render(&scene),
         Command::Shadow(args) => run_shadow(&args),
     };
@@ -78,6 +110,109 @@ fn main() {
         eprintln!("{e}");
         std::process::exit(1);
     }
+}
+
+fn run_propagate(args: &PropagateArgs) -> Result<(), String> {
+    let spacetime = build_spacetime(&MetricSection {
+        kind: args.metric,
+        mass: args.mass,
+        spin: args.spin,
+        charge: args.charge,
+        b0: args.b0,
+    })?;
+
+    let (pos, dir) = (&args.pos, &args.dir);
+    if pos.len() != 3 || dir.len() != 3 {
+        return Err("--pos and --dir each need three components, e.g. --pos=-20,0,0".into());
+    }
+    let x = Vec4::new(0.0, pos[0], pos[1], pos[2]);
+    let embedded = spacetime.cartesian_position(&x);
+    let look_at = [
+        embedded[0] + dir[0],
+        embedded[1] + dir[1],
+        embedded[2] + dir[2],
+    ];
+    let dir_len = (dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]).sqrt();
+    let up = if dir[2].abs() < 0.9 * dir_len {
+        [0.0, 0.0, 1.0]
+    } else {
+        [1.0, 0.0, 0.0]
+    };
+    let camera = Camera::new(
+        CameraSpec {
+            fov_deg: 60.0,
+            res: (1, 1),
+            energy: args.energy,
+            supersample: 1,
+        },
+        CameraPose {
+            position: x,
+            look_at,
+            up,
+            velocity: [0.0; 3],
+        },
+    )
+    .map_err(|e| format!("invalid ray: {e}"))?;
+    let ray = camera
+        .pixel_rays(spacetime.as_ref())
+        .map_err(|e| e.to_string())?[0];
+
+    let defaults = TraceConfig::default();
+    let escape_radius = args.escape_radius.unwrap_or_else(|| {
+        let r = (embedded[0] * embedded[0] + embedded[1] * embedded[1] + embedded[2] * embedded[2])
+            .sqrt();
+        (4.0 * r).max(100.0)
+    });
+    let tol = Tolerances {
+        rtol: args.tol,
+        atol: args.tol,
+    };
+
+    let mut out: Box<dyn std::io::Write> = match &args.out {
+        Some(path) => {
+            Box::new(std::fs::File::create(path).map_err(|e| format!("cannot create {path}: {e}"))?)
+        }
+        None => Box::new(std::io::stdout().lock()),
+    };
+    let write_err = |e: std::io::Error| format!("write failed: {e}");
+
+    writeln!(out, "lambda,t,x,y,z,H").map_err(write_err)?;
+    let mut emit = |lambda: f64, s: &nullgeo::State4| -> Result<(), String> {
+        let [px, py, pz] = spacetime.cartesian_position(&s.x);
+        let h = hamiltonian(spacetime.as_ref(), s);
+        writeln!(out, "{lambda},{},{px},{py},{pz},{h}", s.x[0]).map_err(write_err)
+    };
+
+    let mut s = ray;
+    let mut lambda = 0.0;
+    let mut dl = defaults.dl_init;
+    let mut status = "max steps reached";
+    emit(lambda, &s)?;
+    for _ in 0..args.max_steps {
+        if spacetime.is_captured(&s.x) {
+            status = "captured";
+            break;
+        }
+        if spacetime.radius(&s.x) > escape_radius {
+            status = "escaped";
+            break;
+        }
+        let step = rk45_step(spacetime.as_ref(), &s, dl, &tol);
+        if step.accepted {
+            s = step.state;
+            lambda += step.dl_used;
+            emit(lambda, &s)?;
+        } else if step.dl_used <= defaults.dl_min {
+            status = "stalled";
+            break;
+        }
+        dl = step.dl_next.clamp(defaults.dl_min, defaults.dl_max);
+    }
+    eprintln!(
+        "{status} at lambda = {lambda}, r = {}",
+        spacetime.radius(&s.x)
+    );
+    Ok(())
 }
 
 fn run_render(path: &str) -> Result<(), String> {
@@ -133,6 +268,7 @@ fn run_shadow(args: &ShadowArgs) -> Result<(), String> {
             fov_deg: args.fov_deg,
             res: (args.width, args.height),
             energy: args.energy,
+            supersample: 1,
         },
         CameraPose {
             position: Vec4::new(0.0, args.cam_x, 0.0, 0.0),

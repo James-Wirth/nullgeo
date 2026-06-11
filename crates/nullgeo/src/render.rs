@@ -37,7 +37,6 @@ pub fn render<S: Spacetime + Sync + ?Sized>(
         });
     }
 
-    let rays = camera.pixel_rays(spacetime)?;
     let u_obs = camera.observer_four_velocity(spacetime)?;
 
     let shade = |ray: &State4| -> [f32; 3] {
@@ -47,30 +46,45 @@ pub fn render<S: Spacetime + Sync + ?Sized>(
                 let Some(disk) = &scene.disk else {
                     return [0.0; 3];
                 };
-                let Some(u_em) = spacetime.circular_orbits().and_then(|o| o.four_velocity(&state.x))
+                let Some(u_em) = spacetime
+                    .circular_orbits()
+                    .and_then(|o| o.four_velocity(&state.x))
                 else {
                     return [0.0; 3];
                 };
                 let g_factor = ray.p.dot(&u_obs) / state.p.dot(&u_em);
                 let r = spacetime.radius(&state.x);
-                let brightness = (g_factor.powf(disk.g_power)
-                    * (r / r_in).powf(-disk.emissivity_index))
-                    as f32;
+                let brightness =
+                    (g_factor.powf(disk.g_power) * (r / r_in).powf(-disk.emissivity_index)) as f32;
                 [brightness; 3]
             }
             _ => [0.0; 3],
         }
     };
 
-    #[cfg(feature = "parallel")]
-    let data = {
-        use rayon::prelude::*;
-        rays.par_iter().map(shade).collect()
-    };
-    #[cfg(not(feature = "parallel"))]
-    let data = rays.iter().map(shade).collect();
-
     let (width, height) = camera.spec.res;
+    let mut data = vec![[0.0f32; 3]; width * height];
+    let offsets = camera.subpixel_offsets();
+    let weight = 1.0 / offsets.len() as f32;
+
+    for offset in offsets {
+        let rays = camera.pixel_rays_at(spacetime, offset)?;
+
+        #[cfg(feature = "parallel")]
+        let pass: Vec<[f32; 3]> = {
+            use rayon::prelude::*;
+            rays.par_iter().map(shade).collect()
+        };
+        #[cfg(not(feature = "parallel"))]
+        let pass: Vec<[f32; 3]> = rays.iter().map(shade).collect();
+
+        for (pixel, sample) in data.iter_mut().zip(&pass) {
+            for c in 0..3 {
+                pixel[c] += weight * sample[c];
+            }
+        }
+    }
+
     Ok(ImageF32 {
         width,
         height,

@@ -11,6 +11,7 @@ fn test_camera(res: (usize, usize)) -> Camera {
             fov_deg: 60.0,
             res,
             energy: 1.0,
+            supersample: 1,
         },
         CameraPose {
             position: Vec4::new(0.0, -12.0, 5.0, 3.0),
@@ -63,6 +64,7 @@ fn boosted_camera(velocity: [f64; 3]) -> Camera {
             fov_deg: 60.0,
             res: (3, 3),
             energy: 2.5,
+            supersample: 1,
         },
         CameraPose {
             position: Vec4::new(0.0, -12.0, 5.0, 3.0),
@@ -138,6 +140,7 @@ fn minkowski_center_pixel_points_at_look_at() {
             fov_deg: 45.0,
             res: (3, 3),
             energy: 2.0,
+            supersample: 1,
         },
         CameraPose {
             position: Vec4::new(0.0, -10.0, 4.0, -6.0),
@@ -179,6 +182,7 @@ fn camera_rejects_bad_configuration() {
         fov_deg,
         res,
         energy,
+        supersample: 1,
     };
 
     assert!(matches!(
@@ -215,6 +219,7 @@ fn observer_inside_horizon_is_rejected() {
             fov_deg: 60.0,
             res: (2, 2),
             energy: 1.0,
+            supersample: 1,
         },
         CameraPose {
             position: Vec4::new(0.0, 1.0, 0.0, 0.0),

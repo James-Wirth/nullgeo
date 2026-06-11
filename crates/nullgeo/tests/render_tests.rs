@@ -37,6 +37,7 @@ fn minkowski_render_matches_direct_sky_lookup() {
             fov_deg: 40.0,
             res: (8, 6),
             energy: 1.0,
+            supersample: 1,
         },
         CameraPose {
             position: Vec4::new(0.0, position[0], position[1], position[2]),
@@ -78,6 +79,83 @@ fn minkowski_render_matches_direct_sky_lookup() {
     }
 }
 
+#[test]
+fn supersampled_render_averages_subpixel_sky_samples() {
+    let position = [2.0, -3.0, 1.0];
+    let look_at = [3.0, 1.0, 2.0];
+    let make_camera = |supersample| {
+        Camera::new(
+            CameraSpec {
+                fov_deg: 40.0,
+                res: (8, 6),
+                energy: 1.0,
+                supersample,
+            },
+            CameraPose {
+                position: Vec4::new(0.0, position[0], position[1], position[2]),
+                look_at,
+                up: [0.0, 0.0, 1.0],
+                velocity: [0.0; 3],
+            },
+        )
+        .unwrap()
+    };
+    let scene = Scene {
+        sky: SkyMap::Checker {
+            angular_size_deg: 23.0,
+        },
+        sky_secondary: None,
+        disk: None,
+    };
+    let cfg = TraceConfig {
+        escape_radius: 50.0,
+        ..TraceConfig::default()
+    };
+    let camera = make_camera(2);
+    let img = render(&Minkowski, &camera, &scene, &cfg).unwrap();
+    let single = render(&Minkowski, &make_camera(1), &scene, &cfg).unwrap();
+
+    let forward = normalized([
+        look_at[0] - position[0],
+        look_at[1] - position[1],
+        look_at[2] - position[2],
+    ]);
+    let right = normalized(cross(forward, [0.0, 0.0, 1.0]));
+    let up = cross(right, forward);
+
+    let offsets = camera.subpixel_offsets();
+    assert_eq!(offsets.len(), 4);
+    let mut expected = vec![[0.0f32; 3]; 8 * 6];
+    for offset in offsets {
+        for (idx, [f, r, u]) in camera.pixel_directions_at(offset).into_iter().enumerate() {
+            let world = [
+                f * forward[0] + r * right[0] + u * up[0],
+                f * forward[1] + r * right[1] + u * up[1],
+                f * forward[2] + r * right[2] + u * up[2],
+            ];
+            let sample = scene.sky_for(SkySide::Primary).sample(world);
+            for (c, &value) in sample.iter().enumerate() {
+                expected[idx][c] += 0.25 * value;
+            }
+        }
+    }
+
+    for (idx, (got, want)) in img.data.iter().zip(&expected).enumerate() {
+        for c in 0..3 {
+            assert!(
+                (got[c] - want[c]).abs() < 1e-6,
+                "pixel {idx} channel {c}: {} vs {}",
+                got[c],
+                want[c]
+            );
+        }
+    }
+    assert!(
+        img.data != single.data,
+        "supersampling should smooth at least one checker-edge pixel"
+    );
+}
+
 fn face_on_ray(m: &Schwarzschild, z0: f64, b_aim: f64) -> State4 {
     let alpha = (b_aim / z0).atan();
     backward_ray(
@@ -117,9 +195,17 @@ fn face_on_disk_redshift_matches_formula() {
         };
         let r = m.radius(&state.x);
         assert!((6.0..=40.0).contains(&r), "hit radius {r}");
-        assert!(state.x[3].abs() < 1e-5, "hit off the plane: z = {}", state.x[3]);
+        assert!(
+            state.x[3].abs() < 1e-5,
+            "hit off the plane: z = {}",
+            state.x[3]
+        );
 
-        let u_em = m.circular_orbits().unwrap().four_velocity(&state.x).unwrap();
+        let u_em = m
+            .circular_orbits()
+            .unwrap()
+            .four_velocity(&state.x)
+            .unwrap();
         let g_tt_cam = m.g(&ray.x)[(0, 0)];
         let e_obs = ray.p[0] / (-g_tt_cam).sqrt();
         let g_factor = e_obs / state.p.dot(&u_em);
@@ -153,6 +239,7 @@ fn edge_on_disk_image(spin: f64) -> ImageF32 {
             fov_deg: 16.0,
             res: (24, 24),
             energy: 1.0,
+            supersample: 1,
         },
         CameraPose {
             position: Vec4::new(0.0, -100.0, 0.0, 10.0),
@@ -247,12 +334,7 @@ fn tone_map_is_monotone_and_fixes_black() {
         width: 6,
         height: 1,
         data: vec![
-            [0.0; 3],
-            [0.05; 3],
-            [0.3; 3],
-            [1.0; 3],
-            [5.0; 3],
-            [100.0; 3],
+            [0.0; 3], [0.05; 3], [0.3; 3], [1.0; 3], [5.0; 3], [100.0; 3],
         ],
     };
     let mapped = tone_map(&img, 1.0);
