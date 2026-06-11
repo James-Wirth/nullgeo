@@ -30,7 +30,7 @@ fn assert_mat_close(a: &Mat4, b: &Mat4, tol: f64, ctx: &str) {
 #[test]
 fn metric_times_inverse_is_identity() {
     let mink = Minkowski;
-    let schw = Schwarzschild { m: 1.0 };
+    let schw = Schwarzschild::new(1.0).unwrap();
     for x in sample_points() {
         let prod_m = mink.g(&x) * mink.g_inv(&x);
         assert_mat_close(&prod_m, &Mat4::identity(), 1e-12, "minkowski g*g_inv");
@@ -80,7 +80,7 @@ fn reissner_nordstrom_fd_matches_analytic_dg_inv() {
 #[test]
 fn reissner_nordstrom_with_zero_charge_matches_schwarzschild() {
     let rn = ReissnerNordstrom::new(1.0, 0.0).unwrap();
-    let schw = Schwarzschild { m: 1.0 };
+    let schw = Schwarzschild::new(1.0).unwrap();
     for x in sample_points() {
         assert_mat_close(&rn.g(&x), &schw.g(&x), 1e-12, &format!("rn g at {x:?}"));
         assert_mat_close(
@@ -101,7 +101,7 @@ fn reissner_nordstrom_rejects_overcharged_black_hole() {
 
 #[test]
 fn schwarzschild_fd_matches_analytic_dg_inv() {
-    let schw = Schwarzschild { m: 1.0 };
+    let schw = Schwarzschild::new(1.0).unwrap();
     for x in sample_points() {
         let analytic = schw.dg_inv(&x);
         let fd = fd_dg_inv(|y| schw.g_inv(y), &x);
@@ -131,7 +131,7 @@ fn minkowski_fd_dg_inv_is_zero() {
 #[test]
 fn schwarzschild_is_ingoing_kerr_schild() {
     let m = 1.0;
-    let schw = Schwarzschild { m };
+    let schw = Schwarzschild::new(m).unwrap();
     let x = Vec4::new(0.0, 4.0, 0.0, 0.0);
     let g = schw.g(&x);
     let h = m / 4.0;

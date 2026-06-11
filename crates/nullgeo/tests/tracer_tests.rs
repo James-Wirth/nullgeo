@@ -25,7 +25,7 @@ fn static_frame_direction<M: Metric>(m: &M, s: &State4) -> [f64; 3] {
 }
 
 fn aimed_ray(m: &Schwarzschild, r0: f64, b: f64) -> State4 {
-    let alpha = (b * (1.0 - 2.0 * m.m / r0).sqrt() / r0).asin();
+    let alpha = (b * (1.0 - 2.0 * m.mass() / r0).sqrt() / r0).asin();
     backward_ray(
         m,
         Vec4::new(0.0, -r0, 0.0, 0.0),
@@ -36,7 +36,7 @@ fn aimed_ray(m: &Schwarzschild, r0: f64, b: f64) -> State4 {
 
 #[test]
 fn critical_impact_parameter_separates_capture_from_escape() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let b_crit = 27.0_f64.sqrt();
     let cfg = TraceConfig {
         tol: Tolerances {
@@ -64,7 +64,7 @@ fn critical_impact_parameter_separates_capture_from_escape() {
 
 #[test]
 fn weak_field_deflection_matches_second_order_formula() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let x0 = Vec4::new(0.0, -2000.0, 50.0, 0.0);
     let ray = backward_ray(&m, x0, [1.0, 0.0, 0.0], 1.0);
 
@@ -94,7 +94,7 @@ fn weak_field_deflection_matches_second_order_formula() {
 
 #[test]
 fn energy_and_angular_momentum_conserved_along_bent_ray() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let s0 = aimed_ray(&m, 15.0, 5.25);
     let energy = |s: &State4| s.p[0];
     let l_z = |s: &State4| s.x[1] * s.p[2] - s.x[2] * s.p[1];
@@ -166,7 +166,7 @@ fn minkowski_rays_travel_straight() {
 
 #[test]
 fn near_critical_ray_escapes_after_orbiting() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let b_crit = 27.0_f64.sqrt();
     let ray = aimed_ray(&m, 30.0, b_crit * (1.0 + 1e-4));
 

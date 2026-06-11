@@ -50,7 +50,7 @@ struct ShadowArgs {
     width: usize,
     #[arg(long, default_value_t = 256)]
     height: usize,
-    #[arg(long, default_value_t = 20.0)]
+    #[arg(long, default_value_t = 60.0)]
     fov_deg: f64,
     #[arg(long, default_value_t=-15.0)]
     cam_x: f64,

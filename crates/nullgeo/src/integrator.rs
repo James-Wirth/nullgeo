@@ -59,6 +59,8 @@ pub fn rk4_step<M: Metric + ?Sized>(m: &M, s: &State4, dl: f64) -> State4 {
 #[derive(Debug, Clone, Copy)]
 pub struct StepResult {
     pub state: State4,
+    pub dx_start: Vec4,
+    pub dx_end: Vec4,
     pub err: f64,
     pub dl_used: f64,
     pub dl_next: f64,
@@ -153,6 +155,8 @@ pub fn rk45_step<M: Metric + ?Sized>(m: &M, s: &State4, dl: f64, tol: &Tolerance
 
     StepResult {
         state: if accepted { s5 } else { *s },
+        dx_start: kx[0],
+        dx_end: kx[6],
         err,
         dl_used: dl,
         dl_next: dl * scale,

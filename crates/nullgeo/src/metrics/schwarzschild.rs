@@ -1,10 +1,26 @@
 use crate::metric::{Mat4, Metric, Vec4};
 use crate::metrics::kerr_schild;
 use crate::spacetime::Spacetime;
+use crate::{Error, Result};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Schwarzschild {
-    pub m: f64,
+    m: f64,
+}
+
+impl Schwarzschild {
+    pub fn new(m: f64) -> Result<Self> {
+        if !(m >= 0.0 && m.is_finite()) {
+            return Err(Error::InvalidArg(format!(
+                "Schwarzschild requires M >= 0 and finite, got M = {m}"
+            )));
+        }
+        Ok(Self { m })
+    }
+
+    pub fn mass(&self) -> f64 {
+        self.m
+    }
 }
 
 impl Spacetime for Schwarzschild {

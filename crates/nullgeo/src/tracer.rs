@@ -1,4 +1,4 @@
-use crate::integrator::{rhs_hamiltonian, rk4_step, rk45_step, StepResult, Tolerances};
+use crate::integrator::{rk4_step, rk45_step, StepResult, Tolerances};
 use crate::metric::State4;
 use crate::spacetime::{SkySide, Spacetime};
 
@@ -127,9 +127,7 @@ fn annulus_crossing<S: Spacetime + ?Sized>(
     }
 
     let h = step.dl_used;
-    let dz0 = rhs_hamiltonian(spacetime, s0).0[3];
-    let dz1 = rhs_hamiltonian(spacetime, &step.state).0[3];
-    let sigma = hermite_root(z0, z1, h * dz0, h * dz1);
+    let sigma = hermite_root(z0, z1, h * step.dx_start[3], h * step.dx_end[3]);
 
     let hit = rk4_step(spacetime, s0, sigma * h);
     let r_hit = spacetime.radius(&hit.x);
@@ -149,7 +147,7 @@ fn hermite_root(z0: f64, z1: f64, m0: f64, m1: f64) -> f64 {
     };
 
     let (mut lo, mut hi) = (0.0_f64, 1.0_f64);
-    for _ in 0..60 {
+    for _ in 0..30 {
         let mid = 0.5 * (lo + hi);
         if value(mid) * z0 > 0.0 {
             lo = mid;

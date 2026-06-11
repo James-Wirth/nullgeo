@@ -13,6 +13,20 @@ pub enum SkyMap {
 }
 
 impl SkyMap {
+    pub fn checker(angular_size_deg: f64) -> Result<Self> {
+        let half_cells = 180.0 / angular_size_deg;
+        let seamless = angular_size_deg > 0.0
+            && half_cells >= 1.0
+            && (half_cells - half_cells.round()).abs() < 1e-9;
+        if !seamless {
+            return Err(Error::InvalidArg(format!(
+                "checker cells must tile the sphere seamlessly: \
+                 360/{angular_size_deg} is not an even integer"
+            )));
+        }
+        Ok(SkyMap::Checker { angular_size_deg })
+    }
+
     pub fn sample(&self, dir: [f64; 3]) -> [f32; 3] {
         let theta = dir[2].clamp(-1.0, 1.0).acos();
         let phi = dir[1].atan2(dir[0]);

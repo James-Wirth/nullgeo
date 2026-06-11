@@ -69,7 +69,7 @@ fn state_distance(a: &State4, b: &State4) -> f64 {
 
 #[test]
 fn rk45_is_fifth_order() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let s0 = deflected_ray_start();
     let total = 16.0;
 
@@ -86,7 +86,7 @@ fn rk45_is_fifth_order() {
 
 #[test]
 fn adaptive_matches_fine_reference() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let s0 = deflected_ray_start();
     let total = 30.0;
 
@@ -100,7 +100,7 @@ fn adaptive_matches_fine_reference() {
 
 #[test]
 fn adaptive_conserves_null_constraint_and_energy() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let s0 = State4 {
         x: Vec4::new(0.0, -15.0, 0.0, 0.0),
         p: Vec4::new(
@@ -139,7 +139,7 @@ fn adaptive_conserves_null_constraint_and_energy() {
 
 #[test]
 fn oversized_step_is_rejected_and_shrunk() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let s0 = deflected_ray_start();
     let tol = Tolerances {
         rtol: 1e-12,

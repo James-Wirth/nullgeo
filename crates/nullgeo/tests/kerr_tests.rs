@@ -105,7 +105,7 @@ fn kerr_schild_radius_satisfies_quartic() {
 #[test]
 fn kerr_with_zero_spin_matches_schwarzschild() {
     let kerr = Kerr::new(1.0, 0.0).unwrap();
-    let schw = Schwarzschild { m: 1.0 };
+    let schw = Schwarzschild::new(1.0).unwrap();
     for x in sample_points() {
         assert_mat_close(&kerr.g(&x), &schw.g(&x), 1e-12, &format!("g at {x:?}"));
         assert_mat_close(

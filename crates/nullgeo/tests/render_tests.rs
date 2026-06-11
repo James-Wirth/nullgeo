@@ -105,7 +105,7 @@ fn face_on_config() -> TraceConfig {
 
 #[test]
 fn face_on_disk_redshift_matches_formula() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let z_cam = 1000.0;
     let cfg = face_on_config();
 
@@ -132,7 +132,7 @@ fn face_on_disk_redshift_matches_formula() {
 
 #[test]
 fn plane_crossings_outside_annulus_do_not_hit() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let cfg = face_on_config();
 
     match trace(&m, face_on_ray(&m, 1000.0, 2.0), &cfg) {

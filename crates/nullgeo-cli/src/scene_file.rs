@@ -166,7 +166,7 @@ pub fn build_spacetime(m: &MetricSection) -> Result<Box<dyn Spacetime + Sync>, S
     let invalid = |e: nullgeo::Error| format!("invalid metric: {e}");
     Ok(match m.kind {
         MetricKind::Minkowski => Box::new(Minkowski),
-        MetricKind::Schwarzschild => Box::new(Schwarzschild { m: m.mass }),
+        MetricKind::Schwarzschild => Box::new(Schwarzschild::new(m.mass).map_err(invalid)?),
         MetricKind::ReissnerNordstrom => {
             Box::new(ReissnerNordstrom::new(m.mass, m.charge).map_err(invalid)?)
         }
@@ -193,7 +193,9 @@ pub fn build_camera(c: &CameraSection) -> Result<Camera, String> {
 
 pub fn build_sky(s: &SkySection, base: &Path) -> Result<SkyMap, String> {
     match (s.checker_deg, &s.image, s.uniform) {
-        (Some(angular_size_deg), None, None) => Ok(SkyMap::Checker { angular_size_deg }),
+        (Some(angular_size_deg), None, None) => {
+            SkyMap::checker(angular_size_deg).map_err(|e| e.to_string())
+        }
         (None, Some(path), None) => {
             let full = if path.is_absolute() {
                 path.clone()
@@ -354,6 +356,19 @@ mod tests {
         assert_eq!(file.output.exposure, 1.0);
         let cfg = build_trace_config(&file.integrator, file.camera.position);
         assert_eq!(cfg.escape_radius, 100.0);
+    }
+
+    #[test]
+    fn seamed_checker_rejected() {
+        let sky = |deg| SkySection {
+            checker_deg: Some(deg),
+            image: None,
+            uniform: None,
+        };
+        assert!(build_sky(&sky(7.0), Path::new(".")).is_err());
+        assert!(build_sky(&sky(40.0), Path::new(".")).is_err());
+        assert!(build_sky(&sky(-15.0), Path::new(".")).is_err());
+        assert!(build_sky(&sky(12.0), Path::new(".")).is_ok());
     }
 
     #[test]

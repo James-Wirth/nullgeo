@@ -23,7 +23,7 @@ fn test_camera(res: (usize, usize)) -> Camera {
 
 #[test]
 fn coframe_is_orthonormal() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let x = Vec4::new(0.0, -12.0, 5.0, 3.0);
     let seeds = [
         Vec4::new(0.0, 0.8, -0.5, 0.1),
@@ -48,7 +48,7 @@ fn coframe_is_orthonormal() {
 
 #[test]
 fn pixel_rays_are_null() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let camera = test_camera((7, 5));
     for ray in camera.pixel_rays(&m).unwrap() {
         let h = hamiltonian(&m, &ray);
@@ -58,7 +58,7 @@ fn pixel_rays_are_null() {
 
 #[test]
 fn pixel_rays_run_backward_in_time() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let camera = test_camera((5, 5));
     for ray in camera.pixel_rays(&m).unwrap() {
         let velocity = m.g_inv(&ray.x) * ray.p;
@@ -69,7 +69,7 @@ fn pixel_rays_run_backward_in_time() {
 #[test]
 fn pixel_rays_carry_killing_energy_of_static_observer() {
     let mass = 1.0;
-    let m = Schwarzschild { m: mass };
+    let m = Schwarzschild::new(mass).unwrap();
     let camera = test_camera((5, 5));
     let r = (12.0_f64 * 12.0 + 5.0 * 5.0 + 3.0 * 3.0).sqrt();
     let expected = (1.0 - 2.0 * mass / r).sqrt();
@@ -158,7 +158,7 @@ fn camera_rejects_bad_configuration() {
 
 #[test]
 fn observer_inside_horizon_is_rejected() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let camera = Camera::new(
         CameraSpec {
             fov_deg: 60.0,

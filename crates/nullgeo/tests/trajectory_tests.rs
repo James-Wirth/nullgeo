@@ -5,7 +5,7 @@ use nullgeo::metrics::schwarzschild::Schwarzschild;
 #[test]
 #[allow(clippy::excessive_precision)]
 fn b_6p11_ray_escapes() {
-    let m = Schwarzschild { m: 1.0 };
+    let m = Schwarzschild::new(1.0).unwrap();
     let mut s = State4 {
         x: Vec4::new(0.0, -15.0, 0.0, 0.0),
         p: Vec4::new(
