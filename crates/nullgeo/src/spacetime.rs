@@ -64,17 +64,23 @@ pub trait Spacetime: Metric {
         (s, RayAlignment::identity())
     }
 
-    fn isco_radius(&self) -> Option<f64> {
+    fn circular_orbits(&self) -> Option<&dyn CircularOrbits> {
         None
     }
+}
 
-    fn disk_emitter(&self, _x: &Vec4) -> Option<Vec4> {
-        None
-    }
+pub trait CircularOrbits {
+    fn isco_radius(&self) -> f64;
 
-    fn circular_emitter(&self, x: &Vec4, omega: f64) -> Option<Vec4> {
-        let u = Vec4::new(1.0, -omega * x[2], omega * x[1], 0.0);
-        let norm_sq = metric_dot(&self.g(x), &u, &u);
-        (norm_sq < 0.0).then(|| u / (-norm_sq).sqrt())
-    }
+    fn four_velocity(&self, x: &Vec4) -> Option<Vec4>;
+}
+
+pub fn cartesian_circular_four_velocity<M: Metric + ?Sized>(
+    metric: &M,
+    x: &Vec4,
+    omega: f64,
+) -> Option<Vec4> {
+    let u = Vec4::new(1.0, -omega * x[2], omega * x[1], 0.0);
+    let norm_sq = metric_dot(&metric.g(x), &u, &u);
+    (norm_sq < 0.0).then(|| u / (-norm_sq).sqrt())
 }

@@ -268,6 +268,7 @@ fn camera_rays_are_null_and_see_both_sides() {
             position: Vec4::new(0.0, 20.0, FRAC_PI_2, 0.0),
             look_at: [0.0, 0.0, 0.0],
             up: [0.0, 0.0, 1.0],
+            velocity: [0.0; 3],
         },
     )
     .unwrap();

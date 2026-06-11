@@ -21,10 +21,10 @@ pub fn render<S: Spacetime + Sync + ?Sized>(
     let mut cfg = *cfg;
     let mut r_in = 0.0;
     if let Some(disk) = &scene.disk {
-        let isco = spacetime.isco_radius().ok_or_else(|| {
+        let orbits = spacetime.circular_orbits().ok_or_else(|| {
             Error::InvalidArg("this spacetime does not support an equatorial disk".into())
         })?;
-        r_in = disk.r_in.max(isco);
+        r_in = disk.r_in.max(orbits.isco_radius());
         if disk.r_out <= r_in {
             return Err(Error::InvalidArg(format!(
                 "disk r_out = {} must exceed inner radius {} (after ISCO clamp)",
@@ -38,8 +38,7 @@ pub fn render<S: Spacetime + Sync + ?Sized>(
     }
 
     let rays = camera.pixel_rays(spacetime)?;
-    let g_tt = spacetime.g(&camera.pose.position)[(0, 0)];
-    let u_obs_t = 1.0 / (-g_tt).sqrt();
+    let u_obs = camera.observer_four_velocity(spacetime)?;
 
     let shade = |ray: &State4| -> [f32; 3] {
         match trace(spacetime, *ray, &cfg) {
@@ -48,10 +47,11 @@ pub fn render<S: Spacetime + Sync + ?Sized>(
                 let Some(disk) = &scene.disk else {
                     return [0.0; 3];
                 };
-                let Some(u_em) = spacetime.disk_emitter(&state.x) else {
+                let Some(u_em) = spacetime.circular_orbits().and_then(|o| o.four_velocity(&state.x))
+                else {
                     return [0.0; 3];
                 };
-                let g_factor = (ray.p[0] * u_obs_t) / state.p.dot(&u_em);
+                let g_factor = ray.p.dot(&u_obs) / state.p.dot(&u_em);
                 let r = spacetime.radius(&state.x);
                 let brightness = (g_factor.powf(disk.g_power)
                     * (r / r_in).powf(-disk.emissivity_index))

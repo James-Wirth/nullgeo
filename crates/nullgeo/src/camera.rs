@@ -1,5 +1,5 @@
-use crate::frame::{build_coframe_seeded, make_null_covector};
-use crate::metric::{State4, Vec4};
+use crate::frame::{build_coframe_for, make_null_covector, metric_dot};
+use crate::metric::{Metric, State4, Vec4};
 use crate::spacetime::Spacetime;
 use crate::{Error, Result};
 
@@ -15,6 +15,7 @@ pub struct CameraPose {
     pub position: Vec4,
     pub look_at: [f64; 3],
     pub up: [f64; 3],
+    pub velocity: [f64; 3],
 }
 
 #[derive(Clone, Debug)]
@@ -55,6 +56,9 @@ impl Camera {
         if spec.energy <= 0.0 {
             return Err(Error::InvalidArg("energy must be positive".into()));
         }
+        if pose.velocity.iter().any(|c| !c.is_finite()) {
+            return Err(Error::InvalidArg("velocity must be finite".into()));
+        }
         let camera = Self { spec, pose };
         camera.view_basis([pose.position[1], pose.position[2], pose.position[3]])?;
         Ok(camera)
@@ -87,12 +91,24 @@ impl Camera {
         dirs
     }
 
+    pub fn observer_four_velocity<M: Metric + ?Sized>(&self, m: &M) -> Result<Vec4> {
+        let [vx, vy, vz] = self.pose.velocity;
+        let u = Vec4::new(1.0, vx, vy, vz);
+        let len_sq = metric_dot(&m.g(&self.pose.position), &u, &u);
+        if len_sq >= -1e-12 {
+            return Err(Error::NonTimelikeObserver(self.pose.position));
+        }
+        Ok(u / (-len_sq).sqrt())
+    }
+
     pub fn pixel_rays<S: Spacetime + ?Sized>(&self, s: &S) -> Result<Vec<State4>> {
         let [forward, right, up] = self.view_basis(s.cartesian_position(&self.pose.position))?;
+        let observer = self.observer_four_velocity(s)?;
         let seed = |d: [f64; 3]| s.chart_direction(&self.pose.position, d);
-        let coframe = build_coframe_seeded(
+        let coframe = build_coframe_for(
             s,
             &self.pose.position,
+            &observer,
             [seed(forward), seed(right), seed(up)],
         )?;
 

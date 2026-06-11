@@ -138,6 +138,7 @@ fn run_shadow(args: &ShadowArgs) -> Result<(), String> {
             position: Vec4::new(0.0, args.cam_x, 0.0, 0.0),
             look_at: [0.0, 0.0, 0.0],
             up: [0.0, 0.0, 1.0],
+            velocity: [0.0; 3],
         },
     )
     .map_err(|e| format!("invalid camera: {e}"))?;

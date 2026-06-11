@@ -16,6 +16,7 @@ fn test_camera(res: (usize, usize)) -> Camera {
             position: Vec4::new(0.0, -12.0, 5.0, 3.0),
             look_at: [0.0, 0.0, 0.0],
             up: [0.0, 0.0, 1.0],
+            velocity: [0.0; 3],
         },
     )
     .unwrap()
@@ -54,6 +55,53 @@ fn pixel_rays_are_null() {
         let h = hamiltonian(&m, &ray);
         assert!(h.abs() < 1e-12, "H = {h:.3e}");
     }
+}
+
+fn boosted_camera(velocity: [f64; 3]) -> Camera {
+    Camera::new(
+        CameraSpec {
+            fov_deg: 60.0,
+            res: (3, 3),
+            energy: 2.5,
+        },
+        CameraPose {
+            position: Vec4::new(0.0, -12.0, 5.0, 3.0),
+            look_at: [0.0, 0.0, 0.0],
+            up: [0.0, 0.0, 1.0],
+            velocity,
+        },
+    )
+    .unwrap()
+}
+
+#[test]
+fn boosted_camera_rays_are_null_with_observer_frame_energy() {
+    let m = Schwarzschild::new(1.0).unwrap();
+    let camera = boosted_camera([0.05, -0.1, 0.2]);
+    let u = camera.observer_four_velocity(&m).unwrap();
+
+    let g = m.g(&camera.pose.position);
+    let u_norm = u.dot(&(g * u));
+    assert!((u_norm + 1.0).abs() < 1e-12, "u.u = {u_norm}");
+
+    for ray in camera.pixel_rays(&m).unwrap() {
+        let h = hamiltonian(&m, &ray);
+        assert!(h.abs() < 1e-12, "H = {h:.3e}");
+        let energy = ray.p.dot(&u);
+        assert!(
+            (energy - 2.5).abs() < 1e-12,
+            "observer-frame energy {energy}"
+        );
+    }
+}
+
+#[test]
+fn superluminal_camera_rejected_at_ray_construction() {
+    let camera = boosted_camera([1.5, 0.0, 0.0]);
+    assert!(matches!(
+        camera.pixel_rays(&Minkowski),
+        Err(Error::NonTimelikeObserver(_))
+    ));
 }
 
 #[test]
@@ -95,6 +143,7 @@ fn minkowski_center_pixel_points_at_look_at() {
             position: Vec4::new(0.0, -10.0, 4.0, -6.0),
             look_at: [2.0, -1.0, 3.0],
             up: [0.0, 0.0, 1.0],
+            velocity: [0.0; 3],
         },
     )
     .unwrap();
@@ -124,6 +173,7 @@ fn camera_rejects_bad_configuration() {
         position: Vec4::new(0.0, -10.0, 0.0, 0.0),
         look_at: [0.0, 0.0, 0.0],
         up: [0.0, 0.0, 1.0],
+        velocity: [0.0; 3],
     };
     let spec = |fov_deg, res, energy| CameraSpec {
         fov_deg,
@@ -150,6 +200,7 @@ fn camera_rejects_bad_configuration() {
                 up: [-1.0, 0.0, 0.0],
                 look_at: [0.0, 0.0, 0.0],
                 position: Vec4::new(0.0, -10.0, 0.0, 0.0),
+                velocity: [0.0; 3],
             }
         ),
         Err(Error::InvalidArg(_))
@@ -169,6 +220,7 @@ fn observer_inside_horizon_is_rejected() {
             position: Vec4::new(0.0, 1.0, 0.0, 0.0),
             look_at: [0.0, 0.0, 0.0],
             up: [0.0, 0.0, 1.0],
+            velocity: [0.0; 3],
         },
     )
     .unwrap();

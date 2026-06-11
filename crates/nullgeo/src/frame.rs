@@ -34,14 +34,22 @@ pub fn build_coframe_seeded<M: Metric + ?Sized>(
     x: &Vec4,
     seeds: [Vec4; 3],
 ) -> Result<[Vec4; 4]> {
+    build_coframe_for(m, x, &Vec4::new(1.0, 0.0, 0.0, 0.0), seeds)
+}
+
+pub fn build_coframe_for<M: Metric + ?Sized>(
+    m: &M,
+    x: &Vec4,
+    observer: &Vec4,
+    seeds: [Vec4; 3],
+) -> Result<[Vec4; 4]> {
     let g = m.g(x);
 
-    let t_axis = Vec4::new(1.0, 0.0, 0.0, 0.0);
-    let t_len_sq = metric_dot(&g, &t_axis, &t_axis);
-    if t_len_sq >= -1e-12 {
+    let u_len_sq = metric_dot(&g, observer, observer);
+    if u_len_sq >= -1e-12 {
         return Err(Error::NonTimelikeObserver(*x));
     }
-    let e0 = t_axis / (-t_len_sq).sqrt();
+    let e0 = observer / (-u_len_sq).sqrt();
 
     let e1 = unit_spacelike(&g, &project_out(&g, &seeds[0], &e0), x)?;
 

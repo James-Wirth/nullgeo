@@ -42,6 +42,7 @@ fn minkowski_render_matches_direct_sky_lookup() {
             position: Vec4::new(0.0, position[0], position[1], position[2]),
             look_at,
             up: [0.0, 0.0, 1.0],
+            velocity: [0.0; 3],
         },
     )
     .unwrap();
@@ -118,7 +119,7 @@ fn face_on_disk_redshift_matches_formula() {
         assert!((6.0..=40.0).contains(&r), "hit radius {r}");
         assert!(state.x[3].abs() < 1e-5, "hit off the plane: z = {}", state.x[3]);
 
-        let u_em = m.disk_emitter(&state.x).unwrap();
+        let u_em = m.circular_orbits().unwrap().four_velocity(&state.x).unwrap();
         let g_tt_cam = m.g(&ray.x)[(0, 0)];
         let e_obs = ray.p[0] / (-g_tt_cam).sqrt();
         let g_factor = e_obs / state.p.dot(&u_em);
@@ -157,6 +158,7 @@ fn edge_on_disk_image(spin: f64) -> ImageF32 {
             position: Vec4::new(0.0, -100.0, 0.0, 10.0),
             look_at: [0.0, 0.0, 0.0],
             up: [0.0, 0.0, 1.0],
+            velocity: [0.0; 3],
         },
     )
     .unwrap();

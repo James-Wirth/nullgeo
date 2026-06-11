@@ -1,6 +1,6 @@
 use crate::metric::{Mat4, Metric, Vec4};
 use crate::metrics::kerr_schild;
-use crate::spacetime::Spacetime;
+use crate::spacetime::{cartesian_circular_four_velocity, CircularOrbits, Spacetime};
 use crate::{Error, Result};
 
 #[derive(Clone, Copy, Debug)]
@@ -28,13 +28,19 @@ impl Spacetime for Schwarzschild {
         self.radius(x) <= 2.0 * self.m * (1.0 + 1e-3)
     }
 
-    fn isco_radius(&self) -> Option<f64> {
-        Some(6.0 * self.m)
+    fn circular_orbits(&self) -> Option<&dyn CircularOrbits> {
+        Some(self)
+    }
+}
+
+impl CircularOrbits for Schwarzschild {
+    fn isco_radius(&self) -> f64 {
+        6.0 * self.m
     }
 
-    fn disk_emitter(&self, x: &Vec4) -> Option<Vec4> {
+    fn four_velocity(&self, x: &Vec4) -> Option<Vec4> {
         let r = self.radius(x);
-        self.circular_emitter(x, (self.m / (r * r * r)).sqrt())
+        cartesian_circular_four_velocity(self, x, (self.m / (r * r * r)).sqrt())
     }
 }
 

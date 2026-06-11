@@ -1,4 +1,5 @@
 use nullgeo::metric::{fd_dg_inv, Mat4, Metric, Vec4};
+use nullgeo::metrics::kerr::Kerr;
 use nullgeo::metrics::minkowski::Minkowski;
 use nullgeo::metrics::reissner_nordstrom::ReissnerNordstrom;
 use nullgeo::metrics::schwarzschild::Schwarzschild;
@@ -112,6 +113,44 @@ fn schwarzschild_fd_matches_analytic_dg_inv() {
                 &analytic[mu],
                 1e-7 * scale,
                 &format!("dg_inv[{mu}] at {x:?}"),
+            );
+        }
+    }
+}
+
+#[test]
+fn kerr_fd_matches_analytic_dg_inv() {
+    for spin in [0.9, -0.6] {
+        let kerr = Kerr::new(1.0, spin).unwrap();
+        for x in sample_points() {
+            let analytic = kerr.dg_inv(&x);
+            let fd = fd_dg_inv(|y| kerr.g_inv(y), &x);
+            let scale = analytic.iter().map(|m| m.amax()).fold(1.0_f64, f64::max);
+            for (mu, fd_mu) in fd.iter().enumerate() {
+                assert_mat_close(
+                    fd_mu,
+                    &analytic[mu],
+                    1e-7 * scale,
+                    &format!("kerr(a={spin}) dg_inv[{mu}] at {x:?}"),
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn kerr_dg_inv_with_zero_spin_matches_schwarzschild() {
+    let kerr = Kerr::new(1.0, 0.0).unwrap();
+    let schw = Schwarzschild::new(1.0).unwrap();
+    for x in sample_points() {
+        let dk = kerr.dg_inv(&x);
+        let ds = schw.dg_inv(&x);
+        for mu in 0..4 {
+            assert_mat_close(
+                &dk[mu],
+                &ds[mu],
+                1e-12,
+                &format!("kerr a=0 dg_inv[{mu}] at {x:?}"),
             );
         }
     }

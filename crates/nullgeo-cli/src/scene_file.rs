@@ -57,6 +57,8 @@ pub struct CameraSection {
     pub look_at: [f64; 3],
     #[serde(default = "default_up")]
     pub up: [f64; 3],
+    #[serde(default)]
+    pub velocity: [f64; 3],
     #[serde(default = "default_fov")]
     pub fov_deg: f64,
     pub width: usize,
@@ -186,6 +188,7 @@ pub fn build_camera(c: &CameraSection) -> Result<Camera, String> {
             position: Vec4::new(0.0, c.position[0], c.position[1], c.position[2]),
             look_at: c.look_at,
             up: c.up,
+            velocity: c.velocity,
         },
     )
     .map_err(|e| format!("invalid camera: {e}"))

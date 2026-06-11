@@ -21,7 +21,7 @@ pub use render::{render, tone_map, ImageF32};
 pub use scene::disk::Disk;
 pub use scene::sky::{EquirectImage, SkyMap};
 pub use scene::Scene;
-pub use spacetime::{RayAlignment, SkySide, Spacetime};
+pub use spacetime::{CircularOrbits, RayAlignment, SkySide, Spacetime};
 pub use tracer::{trace, EquatorialAnnulus, Termination, TraceConfig};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
