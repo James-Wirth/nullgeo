@@ -22,6 +22,6 @@ checker_deg = 15.0
 tol = 1e-9
 max_steps = 200000
 
-[output]
+[[output]]
 path = "kerr_disk.png"
 exposure = 4.0

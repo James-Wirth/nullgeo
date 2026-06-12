@@ -13,10 +13,14 @@ pub mod tracer;
 
 pub use geometry::{Chart, Mat4, Metric, PhasePoint, RayAlignment, Vec4};
 pub use render::{
-    render, tone_map, Camera, CameraPose, CameraSpec, Disk, EquirectImage, ImageF32, Scene, SkyMap,
+    class_color, colorize, render, shade_beauty, shade_map, tone_map, trace_geometry, Camera,
+    CameraPose, CameraSpec, Colormap, Disk, EquirectImage, GeometryBuffer, ImageF32, MapField,
+    MapQuantity, RayClass, RayInfo, RayOutcome, Scene, SkyMap,
 };
 pub use spacetimes::{CircularOrbits, SkySide, Spacetime};
-pub use tracer::{trace, EquatorialAnnulus, Termination, TraceConfig};
+pub use tracer::{
+    trace, trace_with_stats, EquatorialAnnulus, Termination, TraceConfig, TraceStats,
+};
 
 pub type Result<T> = std::result::Result<T, Error>;
 

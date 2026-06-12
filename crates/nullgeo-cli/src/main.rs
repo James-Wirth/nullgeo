@@ -6,10 +6,13 @@ use std::path::Path;
 use clap::{Args, Parser, Subcommand};
 use nullgeo::geometry::Vec4;
 use nullgeo::integrator::{hamiltonian, rk45_step, Tolerances};
-use nullgeo::{render, tone_map, Camera, CameraPose, CameraSpec, Scene, SkyMap, TraceConfig};
+use nullgeo::{
+    colorize, render, shade_beauty, shade_map, tone_map, trace_geometry, Camera, CameraPose,
+    CameraSpec, Colormap, Scene, SkyMap, TraceConfig,
+};
 use scene_file::{
     build_camera, build_disk, build_sky, build_spacetime, build_trace_config, MetricKind,
-    MetricSection, OutputFormat, SceneFile,
+    MetricSection, OutputFormat, OutputSection, SceneFile,
 };
 
 #[derive(Parser, Debug)]
@@ -218,6 +221,9 @@ fn run_render(path: &str) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
     let file: SceneFile =
         toml::from_str(&text).map_err(|e| format!("invalid scene file {path}: {e}"))?;
+    if file.outputs.is_empty() {
+        return Err("scene file needs at least one [[output]] entry".into());
+    }
     let base = Path::new(path).parent().unwrap_or(Path::new("."));
 
     let spacetime = build_spacetime(&file.metric)?;
@@ -233,32 +239,89 @@ fn run_render(path: &str) -> Result<(), String> {
     };
     let cfg = build_trace_config(&file.integrator, file.camera.position);
 
-    let img = render(spacetime.as_ref(), &camera, &scene, &cfg).map_err(|e| e.to_string())?;
-    let pixels = tone_map(&img, file.output.exposure);
+    let buffer =
+        trace_geometry(spacetime.as_ref(), &camera, &scene, &cfg).map_err(|e| e.to_string())?;
 
-    let out = &file.output.path;
-    match file.output.resolved_format() {
+    for output in &file.outputs {
+        write_output(&buffer, &scene, output)?;
+        println!("Wrote {}", output.path.display());
+    }
+    Ok(())
+}
+
+fn write_output(
+    buffer: &nullgeo::GeometryBuffer,
+    scene: &Scene,
+    output: &OutputSection,
+) -> Result<(), String> {
+    let out = &output.path;
+    let path_str = out
+        .to_str()
+        .ok_or_else(|| format!("non-utf8 output path {}", out.display()))?;
+    let format = output.resolved_format();
+
+    let result = match output.kind.map_quantity() {
+        None => {
+            let img = shade_beauty(buffer, scene);
+            match format {
+                OutputFormat::Png | OutputFormat::Ppm => {
+                    let pixels = tone_map(&img, output.exposure);
+                    write_rgb(&pixels, img.width, img.height, format, path_str)
+                }
+                OutputFormat::Pfm => io::write_pfm_rgb(path_str, img.width, img.height, &img.data)
+                    .map_err(|e| e.to_string()),
+                OutputFormat::Csv => Err("a beauty render cannot be exported as csv".into()),
+            }
+        }
+        Some(quantity) => {
+            let field = shade_map(buffer, quantity);
+            match format {
+                OutputFormat::Png | OutputFormat::Ppm => {
+                    let colormap = output
+                        .colormap
+                        .map(|c| c.to_colormap())
+                        .unwrap_or_else(|| Colormap::default_for(quantity));
+                    let pixels = colorize(&field, colormap);
+                    write_rgb(&pixels, field.width, field.height, format, path_str)
+                }
+                OutputFormat::Pfm => {
+                    io::write_pfm_gray(path_str, field.width, field.height, &field.values)
+                        .map_err(|e| e.to_string())
+                }
+                OutputFormat::Csv => {
+                    io::write_csv_matrix(path_str, field.width, field.height, &field.values)
+                        .map_err(|e| e.to_string())
+                }
+            }
+        }
+    };
+    result.map_err(|e| format!("failed to write {}: {e}", out.display()))
+}
+
+fn write_rgb(
+    pixels: &[[u8; 3]],
+    width: usize,
+    height: usize,
+    format: OutputFormat,
+    path: &str,
+) -> Result<(), String> {
+    match format {
         OutputFormat::Png => {
             let flat: Vec<u8> = pixels.iter().flatten().copied().collect();
             image::save_buffer(
-                out,
+                path,
                 &flat,
-                img.width as u32,
-                img.height as u32,
+                width as u32,
+                height as u32,
                 image::ExtendedColorType::Rgb8,
             )
-            .map_err(|e| format!("failed to write {}: {e}", out.display()))?;
+            .map_err(|e| e.to_string())
         }
         OutputFormat::Ppm => {
-            let path_str = out
-                .to_str()
-                .ok_or_else(|| format!("non-utf8 output path {}", out.display()))?;
-            io::write_ppm_rgb(path_str, img.width, img.height, &pixels)
-                .map_err(|e| format!("failed to write {}: {e}", out.display()))?;
+            io::write_ppm_rgb(path, width, height, pixels).map_err(|e| e.to_string())
         }
+        _ => unreachable!(),
     }
-    println!("Wrote {}", out.display());
-    Ok(())
 }
 
 fn run_shadow(args: &ShadowArgs) -> Result<(), String> {

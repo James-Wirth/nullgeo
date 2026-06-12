@@ -327,6 +327,49 @@ fn equirect_sampling_is_exact_at_texel_centers() {
 }
 
 #[test]
+fn graticule_paints_lines_and_passes_background_through() {
+    let background = [0.1, 0.2, 0.3];
+    let sky = SkyMap::graticule(10.0, 1.0, Some(SkyMap::Uniform(background))).unwrap();
+    let dir = |theta_deg: f64, phi_deg: f64| {
+        let (theta, phi) = (theta_deg.to_radians(), phi_deg.to_radians());
+        [
+            theta.sin() * phi.cos(),
+            theta.sin() * phi.sin(),
+            theta.cos(),
+        ]
+    };
+
+    let line = [0.85, 0.85, 0.85];
+    assert_eq!(sky.sample(dir(90.0, 5.0)), line, "equator parallel");
+    assert_eq!(sky.sample(dir(90.3, 5.0)), line, "inside the line width");
+    assert_eq!(sky.sample(dir(85.0, 10.0)), line, "meridian");
+    assert_eq!(sky.sample(dir(85.0, 5.0)), background, "between lines");
+    assert_eq!(sky.sample(dir(84.0, 5.2)), background, "between lines");
+
+    let phi_near_meridian = 10.0 - 0.6 / 85.0_f64.to_radians().sin();
+    assert_eq!(
+        sky.sample(dir(85.0, phi_near_meridian)),
+        background,
+        "0.6 degrees of arc from a meridian is off a 1-degree-wide line"
+    );
+    assert_eq!(
+        sky.sample(dir(5.0, phi_near_meridian)),
+        line,
+        "near the pole the same coordinate offset is a tiny arc, so meridians merge"
+    );
+}
+
+#[test]
+fn graticule_rejects_seams_and_degenerate_widths() {
+    assert!(SkyMap::graticule(7.0, 0.5, None).is_err());
+    assert!(SkyMap::graticule(-10.0, 0.5, None).is_err());
+    assert!(SkyMap::graticule(10.0, 0.0, None).is_err());
+    assert!(SkyMap::graticule(10.0, 10.0, None).is_err());
+    assert!(SkyMap::graticule(10.0, 0.5, None).is_ok());
+    assert!(SkyMap::graticule(180.0, 1.0, None).is_ok());
+}
+
+#[test]
 fn tone_map_is_monotone_and_fixes_black() {
     let img = ImageF32 {
         width: 6,

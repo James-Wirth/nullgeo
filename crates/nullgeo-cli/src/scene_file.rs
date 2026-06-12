@@ -4,7 +4,8 @@ use nullgeo::geometry::Vec4;
 use nullgeo::integrator::Tolerances;
 use nullgeo::spacetimes::{Ellis, Kerr, Minkowski, ReissnerNordstrom, Schwarzschild};
 use nullgeo::{
-    Camera, CameraPose, CameraSpec, Disk, EquirectImage, SkyMap, Spacetime, TraceConfig,
+    Camera, CameraPose, CameraSpec, Colormap, Disk, EquirectImage, MapQuantity, SkyMap, Spacetime,
+    TraceConfig,
 };
 use serde::Deserialize;
 
@@ -28,7 +29,8 @@ pub struct SceneFile {
     pub sky_secondary: Option<SkySection>,
     #[serde(default)]
     pub integrator: IntegratorSection,
-    pub output: OutputSection,
+    #[serde(rename = "output")]
+    pub outputs: Vec<OutputSection>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,6 +83,8 @@ pub struct SkySection {
     pub checker_deg: Option<f64>,
     pub image: Option<PathBuf>,
     pub uniform: Option<[f32; 3]>,
+    pub graticule_deg: Option<f64>,
+    pub graticule_width_deg: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,9 +111,61 @@ impl Default for IntegratorSection {
 #[serde(deny_unknown_fields)]
 pub struct OutputSection {
     pub path: PathBuf,
+    #[serde(default)]
+    pub kind: OutputKind,
     pub format: Option<OutputFormat>,
+    pub colormap: Option<ColormapChoice>,
     #[serde(default = "default_exposure")]
     pub exposure: f32,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OutputKind {
+    #[default]
+    Beauty,
+    Classification,
+    Redshift,
+    ImageOrder,
+    MinRadius,
+    CoordTime,
+    AffineLength,
+    Steps,
+    EscapeTheta,
+    EscapePhi,
+}
+
+impl OutputKind {
+    pub fn map_quantity(self) -> Option<MapQuantity> {
+        match self {
+            OutputKind::Beauty => None,
+            OutputKind::Classification => Some(MapQuantity::Classification),
+            OutputKind::Redshift => Some(MapQuantity::Redshift),
+            OutputKind::ImageOrder => Some(MapQuantity::ImageOrder),
+            OutputKind::MinRadius => Some(MapQuantity::MinRadius),
+            OutputKind::CoordTime => Some(MapQuantity::CoordTime),
+            OutputKind::AffineLength => Some(MapQuantity::AffineLength),
+            OutputKind::Steps => Some(MapQuantity::Steps),
+            OutputKind::EscapeTheta => Some(MapQuantity::EscapeTheta),
+            OutputKind::EscapePhi => Some(MapQuantity::EscapePhi),
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColormapChoice {
+    Viridis,
+    Diverging,
+}
+
+impl ColormapChoice {
+    pub fn to_colormap(self) -> Colormap {
+        match self {
+            ColormapChoice::Viridis => Colormap::Viridis,
+            ColormapChoice::Diverging => Colormap::Diverging,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
@@ -117,6 +173,8 @@ pub struct OutputSection {
 pub enum OutputFormat {
     Png,
     Ppm,
+    Pfm,
+    Csv,
 }
 
 impl OutputSection {
@@ -124,6 +182,8 @@ impl OutputSection {
         self.format
             .unwrap_or(match self.path.extension().and_then(|e| e.to_str()) {
                 Some("ppm") => OutputFormat::Ppm,
+                Some("pfm") => OutputFormat::Pfm,
+                Some("csv") => OutputFormat::Csv,
                 _ => OutputFormat::Png,
             })
     }
@@ -165,6 +225,10 @@ fn default_exposure() -> f32 {
     1.0
 }
 
+fn default_graticule_width() -> f64 {
+    0.25
+}
+
 pub fn build_spacetime(m: &MetricSection) -> Result<Box<dyn Spacetime + Sync>, String> {
     let invalid = |e: nullgeo::Error| format!("invalid metric: {e}");
     Ok(match m.kind {
@@ -197,9 +261,9 @@ pub fn build_camera(c: &CameraSection) -> Result<Camera, String> {
 }
 
 pub fn build_sky(s: &SkySection, base: &Path) -> Result<SkyMap, String> {
-    match (s.checker_deg, &s.image, s.uniform) {
+    let background = match (s.checker_deg, &s.image, s.uniform) {
         (Some(angular_size_deg), None, None) => {
-            SkyMap::checker(angular_size_deg).map_err(|e| e.to_string())
+            Some(SkyMap::checker(angular_size_deg).map_err(|e| e.to_string())?)
         }
         (None, Some(path), None) => {
             let full = if path.is_absolute() {
@@ -215,12 +279,31 @@ pub fn build_sky(s: &SkySection, base: &Path) -> Result<SkyMap, String> {
                 .pixels()
                 .map(|p| [p.0[0].powf(2.2), p.0[1].powf(2.2), p.0[2].powf(2.2)])
                 .collect();
-            EquirectImage::new(w as usize, h as usize, data)
-                .map(SkyMap::Equirect)
-                .map_err(|e| e.to_string())
+            Some(
+                EquirectImage::new(w as usize, h as usize, data)
+                    .map(SkyMap::Equirect)
+                    .map_err(|e| e.to_string())?,
+            )
         }
-        (None, None, Some(color)) => Ok(SkyMap::Uniform(color)),
-        _ => Err("sky must set exactly one of checker_deg, image, uniform".into()),
+        (None, None, Some(color)) => Some(SkyMap::Uniform(color)),
+        (None, None, None) => None,
+        _ => return Err("sky must set at most one of checker_deg, image, uniform".into()),
+    };
+
+    match (s.graticule_deg, background) {
+        (Some(spacing_deg), background) => SkyMap::graticule(
+            spacing_deg,
+            s.graticule_width_deg.unwrap_or(default_graticule_width()),
+            background,
+        )
+        .map_err(|e| e.to_string()),
+        (None, _) if s.graticule_width_deg.is_some() => {
+            Err("graticule_width_deg requires graticule_deg".into())
+        }
+        (None, Some(sky)) => Ok(sky),
+        (None, None) => {
+            Err("sky must set one of checker_deg, image, uniform, graticule_deg".into())
+        }
     }
 }
 
@@ -258,7 +341,11 @@ mod tests {
     #[test]
     fn example_scenes_parse_and_build() {
         let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
-        for name in ["kerr_disk.toml", "ellis_checker.toml"] {
+        for name in [
+            "kerr_disk.toml",
+            "ellis_checker.toml",
+            "kerr_diagnostics.toml",
+        ] {
             let text = std::fs::read_to_string(examples.join(name)).unwrap();
             let file = parse(&text);
             build_spacetime(&file.metric).unwrap();
@@ -268,6 +355,7 @@ mod tests {
                 build_sky(sky, &examples).unwrap();
             }
             build_trace_config(&file.integrator, file.camera.position);
+            assert!(!file.outputs.is_empty());
         }
     }
 
@@ -306,10 +394,19 @@ mod tests {
             max_steps = 50000
             escape_radius = 300.0
 
-            [output]
+            [[output]]
             path = "out.ppm"
             format = "ppm"
             exposure = 2.5
+
+            [[output]]
+            path = "redshift.png"
+            kind = "redshift"
+            colormap = "diverging"
+
+            [[output]]
+            path = "order.csv"
+            kind = "image-order"
             "#,
         );
 
@@ -331,8 +428,15 @@ mod tests {
         ));
         assert_eq!(file.integrator.tol, 1e-10);
         assert_eq!(file.integrator.escape_radius, Some(300.0));
-        assert_eq!(file.output.resolved_format(), OutputFormat::Ppm);
-        assert_eq!(file.output.exposure, 2.5);
+        assert_eq!(file.outputs.len(), 3);
+        assert_eq!(file.outputs[0].kind, OutputKind::Beauty);
+        assert_eq!(file.outputs[0].resolved_format(), OutputFormat::Ppm);
+        assert_eq!(file.outputs[0].exposure, 2.5);
+        assert_eq!(file.outputs[1].kind, OutputKind::Redshift);
+        assert_eq!(file.outputs[1].colormap, Some(ColormapChoice::Diverging));
+        assert_eq!(file.outputs[1].resolved_format(), OutputFormat::Png);
+        assert_eq!(file.outputs[2].kind, OutputKind::ImageOrder);
+        assert_eq!(file.outputs[2].resolved_format(), OutputFormat::Csv);
 
         let cfg = build_trace_config(&file.integrator, file.camera.position);
         assert_eq!(cfg.escape_radius, 300.0);
@@ -356,7 +460,7 @@ mod tests {
             [sky]
             checker_deg = 20.0
 
-            [output]
+            [[output]]
             path = "out.png"
             "#,
         );
@@ -367,18 +471,29 @@ mod tests {
         assert_eq!(file.camera.supersample, 1);
         assert_eq!(file.integrator.tol, 1e-9);
         assert_eq!(file.integrator.max_steps, 100_000);
-        assert_eq!(file.output.resolved_format(), OutputFormat::Png);
-        assert_eq!(file.output.exposure, 1.0);
+        assert_eq!(file.outputs[0].kind, OutputKind::Beauty);
+        assert_eq!(file.outputs[0].colormap, None);
+        assert_eq!(file.outputs[0].resolved_format(), OutputFormat::Png);
+        assert_eq!(file.outputs[0].exposure, 1.0);
         let cfg = build_trace_config(&file.integrator, file.camera.position);
         assert_eq!(cfg.escape_radius, 100.0);
+    }
+
+    fn sky_section() -> SkySection {
+        SkySection {
+            checker_deg: None,
+            image: None,
+            uniform: None,
+            graticule_deg: None,
+            graticule_width_deg: None,
+        }
     }
 
     #[test]
     fn seamed_checker_rejected() {
         let sky = |deg| SkySection {
             checker_deg: Some(deg),
-            image: None,
-            uniform: None,
+            ..sky_section()
         };
         assert!(build_sky(&sky(7.0), Path::new(".")).is_err());
         assert!(build_sky(&sky(40.0), Path::new(".")).is_err());
@@ -390,15 +505,46 @@ mod tests {
     fn sky_requires_exactly_one_source() {
         let sky = SkySection {
             checker_deg: Some(10.0),
-            image: None,
             uniform: Some([1.0, 1.0, 1.0]),
+            ..sky_section()
         };
         assert!(build_sky(&sky, Path::new(".")).is_err());
-        let empty = SkySection {
-            checker_deg: None,
-            image: None,
-            uniform: None,
+        assert!(build_sky(&sky_section(), Path::new(".")).is_err());
+    }
+
+    #[test]
+    fn graticule_sky_builds_alone_or_over_background() {
+        let alone = SkySection {
+            graticule_deg: Some(10.0),
+            ..sky_section()
         };
-        assert!(build_sky(&empty, Path::new(".")).is_err());
+        assert!(matches!(
+            build_sky(&alone, Path::new(".")).unwrap(),
+            SkyMap::Graticule { .. }
+        ));
+
+        let over_uniform = SkySection {
+            graticule_deg: Some(15.0),
+            graticule_width_deg: Some(0.5),
+            uniform: Some([0.1, 0.1, 0.2]),
+            ..sky_section()
+        };
+        assert!(matches!(
+            build_sky(&over_uniform, Path::new(".")).unwrap(),
+            SkyMap::Graticule { .. }
+        ));
+
+        let seamed = SkySection {
+            graticule_deg: Some(7.0),
+            ..sky_section()
+        };
+        assert!(build_sky(&seamed, Path::new(".")).is_err());
+
+        let width_without_lines = SkySection {
+            graticule_width_deg: Some(0.5),
+            uniform: Some([0.0; 3]),
+            ..sky_section()
+        };
+        assert!(build_sky(&width_without_lines, Path::new(".")).is_err());
     }
 }

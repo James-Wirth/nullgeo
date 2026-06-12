@@ -16,6 +16,6 @@ checker_deg = 12.0
 [sky_secondary]
 checker_deg = 30.0
 
-[output]
+[[output]]
 path = "ellis_checker.png"
 exposure = 1.0

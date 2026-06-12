@@ -1,0 +1,64 @@
+[metric]
+kind = "kerr"
+mass = 1.0
+spin = 0.9
+
+[camera]
+position = [-85.0, 0.0, 9.0]
+look_at = [0.0, 0.0, 0.0]
+up = [0.0, 0.0, 1.0]
+fov_deg = 24.0
+width = 640
+height = 360
+
+[disk]
+r_out = 18.0
+
+[sky]
+graticule_deg = 10.0
+graticule_width_deg = 0.25
+
+[integrator]
+tol = 1e-9
+max_steps = 200000
+
+[[output]]
+path = "kerr_graticule.png"
+kind = "beauty"
+exposure = 4.0
+
+[[output]]
+path = "kerr_classification.png"
+kind = "classification"
+
+[[output]]
+path = "kerr_redshift.png"
+kind = "redshift"
+
+[[output]]
+path = "kerr_image_order.png"
+kind = "image-order"
+
+[[output]]
+path = "kerr_min_radius.png"
+kind = "min-radius"
+
+[[output]]
+path = "kerr_coord_time.png"
+kind = "coord-time"
+
+[[output]]
+path = "kerr_steps.png"
+kind = "steps"
+
+[[output]]
+path = "kerr_escape_theta.csv"
+kind = "escape-theta"
+
+[[output]]
+path = "kerr_escape_phi.csv"
+kind = "escape-phi"
+
+[[output]]
+path = "kerr_min_radius.pfm"
+kind = "min-radius"

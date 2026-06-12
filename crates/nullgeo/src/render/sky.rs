@@ -4,15 +4,48 @@ use crate::{Error, Result};
 
 const CHECKER_LIGHT: [f32; 3] = [0.85, 0.85, 0.85];
 const CHECKER_DARK: [f32; 3] = [0.05, 0.05, 0.05];
+const GRATICULE_LINE: [f32; 3] = [0.85, 0.85, 0.85];
 
 #[derive(Debug, Clone)]
 pub enum SkyMap {
     Uniform([f32; 3]),
-    Checker { angular_size_deg: f64 },
+    Checker {
+        angular_size_deg: f64,
+    },
     Equirect(EquirectImage),
+    Graticule {
+        spacing_deg: f64,
+        line_width_deg: f64,
+        background: Box<SkyMap>,
+    },
 }
 
 impl SkyMap {
+    pub fn graticule(
+        spacing_deg: f64,
+        line_width_deg: f64,
+        background: Option<SkyMap>,
+    ) -> Result<Self> {
+        let bands = 180.0 / spacing_deg;
+        let seamless = spacing_deg > 0.0 && bands >= 1.0 && (bands - bands.round()).abs() < 1e-9;
+        if !seamless {
+            return Err(Error::InvalidArg(format!(
+                "graticule lines must tile the sphere seamlessly: \
+                 180/{spacing_deg} is not an integer"
+            )));
+        }
+        if !(line_width_deg > 0.0 && line_width_deg < spacing_deg) {
+            return Err(Error::InvalidArg(format!(
+                "graticule line width {line_width_deg} must be in (0, {spacing_deg})"
+            )));
+        }
+        Ok(SkyMap::Graticule {
+            spacing_deg,
+            line_width_deg,
+            background: Box::new(background.unwrap_or(SkyMap::Uniform([0.0; 3]))),
+        })
+    }
+
     pub fn checker(angular_size_deg: f64) -> Result<Self> {
         let half_cells = 180.0 / angular_size_deg;
         let seamless = angular_size_deg > 0.0
@@ -42,6 +75,22 @@ impl SkyMap {
                 }
             }
             SkyMap::Equirect(image) => image.sample((phi + PI) / (2.0 * PI), theta / PI),
+            SkyMap::Graticule {
+                spacing_deg,
+                line_width_deg,
+                background,
+            } => {
+                let spacing = spacing_deg.to_radians();
+                let half_width = 0.5 * line_width_deg.to_radians();
+                let offset = |angle: f64| (angle - (angle / spacing).round() * spacing).abs();
+                let on_parallel = offset(theta) <= half_width;
+                let on_meridian = offset(phi) * theta.sin() <= half_width;
+                if on_parallel || on_meridian {
+                    GRATICULE_LINE
+                } else {
+                    background.sample(dir)
+                }
+            }
         }
     }
 }

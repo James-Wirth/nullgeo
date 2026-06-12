@@ -64,37 +64,81 @@ pub enum Termination {
     },
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct TraceStats {
+    pub affine_length: f64,
+    pub coord_time: f64,
+    pub equatorial_crossings: usize,
+    pub min_radius: f64,
+    pub steps_accepted: usize,
+    pub steps_rejected: usize,
+}
+
 pub fn trace<S: Spacetime + ?Sized>(
     spacetime: &S,
     start: PhasePoint,
     cfg: &TraceConfig,
 ) -> Termination {
+    trace_with_stats(spacetime, start, cfg).0
+}
+
+pub fn trace_with_stats<S: Spacetime + ?Sized>(
+    spacetime: &S,
+    start: PhasePoint,
+    cfg: &TraceConfig,
+) -> (Termination, TraceStats) {
     let (mut s, alignment) = spacetime.align_ray(start);
     let mut dl = cfg.dl_init.clamp(cfg.dl_min, cfg.dl_max);
+    let t_start = s.x[0];
+    let mut stats = TraceStats {
+        affine_length: 0.0,
+        coord_time: 0.0,
+        equatorial_crossings: 0,
+        min_radius: spacetime.radius(&s.x),
+        steps_accepted: 0,
+        steps_rejected: 0,
+    };
 
     for _ in 0..cfg.max_steps {
+        stats.coord_time = (t_start - s.x[0]).abs();
         if spacetime.is_captured(&s.x) {
-            return Termination::Captured { state: s };
+            return (Termination::Captured { state: s }, stats);
         }
         if spacetime.radius(&s.x) > cfg.escape_radius {
             let v = raise(&spacetime.g_inv(&s.x), &s.p);
-            return Termination::Escaped {
+            let escaped = Termination::Escaped {
                 side: spacetime.sky_side(&s.x),
                 dir: alignment.apply(spacetime.embed_direction(&s.x, &v)),
                 state: s,
             };
+            return (escaped, stats);
         }
 
         let step = rk45_step(spacetime, &s, dl, &cfg.tol);
         if step.accepted {
-            if let Some(annulus) = &cfg.disk {
-                if let Some(hit) = annulus_crossing(spacetime, &s, &step, annulus) {
-                    return Termination::HitSurface { state: hit };
+            let crossing =
+                spacetime.equator_distance(&s.x) * spacetime.equator_distance(&step.state.x) < 0.0;
+            stats.steps_accepted += 1;
+            if crossing {
+                if let Some(annulus) = &cfg.disk {
+                    if let Some((hit, dl_to_hit)) = annulus_crossing(spacetime, &s, &step, annulus)
+                    {
+                        stats.affine_length += dl_to_hit;
+                        stats.coord_time = (t_start - hit.x[0]).abs();
+                        stats.min_radius = stats.min_radius.min(spacetime.radius(&hit.x));
+                        return (Termination::HitSurface { state: hit }, stats);
+                    }
                 }
+                stats.equatorial_crossings += 1;
             }
+            stats.affine_length += step.dl_used;
+            stats.min_radius = stats.min_radius.min(spacetime.radius(&step.state.x));
             s = step.state;
-        } else if step.dl_used <= cfg.dl_min {
-            return Termination::Stalled { state: s };
+        } else {
+            stats.steps_rejected += 1;
+            if step.dl_used <= cfg.dl_min {
+                return (Termination::Stalled { state: s }, stats);
+            }
         }
         dl = step.dl_next.clamp(cfg.dl_min, cfg.dl_max);
         if let Some(annulus) = &cfg.disk {
@@ -106,7 +150,8 @@ pub fn trace<S: Spacetime + ?Sized>(
         }
     }
 
-    Termination::MaxSteps { state: s }
+    stats.coord_time = (t_start - s.x[0]).abs();
+    (Termination::MaxSteps { state: s }, stats)
 }
 
 fn annulus_crossing<S: Spacetime + ?Sized>(
@@ -114,12 +159,9 @@ fn annulus_crossing<S: Spacetime + ?Sized>(
     s0: &PhasePoint,
     step: &StepResult,
     annulus: &EquatorialAnnulus,
-) -> Option<PhasePoint> {
+) -> Option<(PhasePoint, f64)> {
     let z0 = spacetime.equator_distance(&s0.x);
     let z1 = spacetime.equator_distance(&step.state.x);
-    if z0 * z1 >= 0.0 {
-        return None;
-    }
 
     let (lo, hi) = annulus.band();
     let in_band = |r: f64| r >= lo && r <= hi;
@@ -139,7 +181,7 @@ fn annulus_crossing<S: Spacetime + ?Sized>(
     let r_hit = spacetime.radius(&hit.x);
     (annulus.r_in..=annulus.r_out)
         .contains(&r_hit)
-        .then_some(hit)
+        .then_some((hit, sigma * h))
 }
 
 fn hermite_root(z0: f64, z1: f64, m0: f64, m1: f64) -> f64 {
