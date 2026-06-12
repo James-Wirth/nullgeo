@@ -1,9 +1,6 @@
-pub mod disk;
-pub mod sky;
-
-use crate::spacetime::SkySide;
-use disk::Disk;
-use sky::SkyMap;
+use super::disk::Disk;
+use super::sky::SkyMap;
+use crate::spacetimes::SkySide;
 
 #[derive(Debug, Clone)]
 pub struct Scene {

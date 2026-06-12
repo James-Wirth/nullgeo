@@ -1,6 +1,5 @@
-use crate::metric::{Mat4, Metric, Vec4};
-use crate::metrics::kerr_schild;
-use crate::spacetime::{cartesian_circular_four_velocity, CircularOrbits, Spacetime};
+use crate::geometry::{Chart, Mat4, Metric, Vec4};
+use crate::spacetimes::{cartesian_circular_four_velocity, kerr_schild, CircularOrbits, Spacetime};
 use crate::{Error, Result};
 
 #[derive(Clone, Copy, Debug)]
@@ -55,11 +54,13 @@ impl Kerr {
     }
 }
 
-impl Spacetime for Kerr {
+impl Chart for Kerr {
     fn radius(&self, x: &Vec4) -> f64 {
         self.ks_radius_sq(x).sqrt()
     }
+}
 
+impl Spacetime for Kerr {
     fn is_captured(&self, x: &Vec4) -> bool {
         self.radius(x) <= self.outer_horizon() * (1.0 + 1e-3)
     }

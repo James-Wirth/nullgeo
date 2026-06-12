@@ -1,16 +1,12 @@
-use crate::metric::{Mat4, Metric, Vec4};
+use super::{inner, lower, Mat4, Metric, Vec4};
 use crate::{Error, Result};
 
-pub fn metric_dot(g: &Mat4, a: &Vec4, b: &Vec4) -> f64 {
-    a.dot(&(g * b))
-}
-
 fn project_out(g: &Mat4, v: &Vec4, onto: &Vec4) -> Vec4 {
-    v - onto * (metric_dot(g, v, onto) / metric_dot(g, onto, onto))
+    v - onto * (inner(g, v, onto) / inner(g, onto, onto))
 }
 
 fn unit_spacelike(g: &Mat4, v: &Vec4, x: &Vec4) -> Result<Vec4> {
-    let len_sq = metric_dot(g, v, v);
+    let len_sq = inner(g, v, v);
     if len_sq <= 1e-24 {
         return Err(Error::DegenerateFrame(*x));
     }
@@ -45,7 +41,7 @@ pub fn build_coframe_for<M: Metric + ?Sized>(
 ) -> Result<[Vec4; 4]> {
     let g = m.g(x);
 
-    let u_len_sq = metric_dot(&g, observer, observer);
+    let u_len_sq = inner(&g, observer, observer);
     if u_len_sq >= -1e-12 {
         return Err(Error::NonTimelikeObserver(*x));
     }
@@ -62,7 +58,12 @@ pub fn build_coframe_for<M: Metric + ?Sized>(
     s3 = project_out(&g, &s3, &e2);
     let e3 = unit_spacelike(&g, &s3, x)?;
 
-    Ok([g * e0, g * e1, g * e2, g * e3])
+    Ok([
+        lower(&g, &e0),
+        lower(&g, &e1),
+        lower(&g, &e2),
+        lower(&g, &e3),
+    ])
 }
 
 pub fn make_null_covector(coframe: &[Vec4; 4], n: [f64; 3], energy: f64) -> Vec4 {

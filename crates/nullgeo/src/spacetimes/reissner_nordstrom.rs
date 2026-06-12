@@ -1,6 +1,5 @@
-use crate::metric::{Mat4, Metric, Vec4};
-use crate::metrics::kerr_schild;
-use crate::spacetime::Spacetime;
+use crate::geometry::{Chart, Mat4, Metric, Vec4};
+use crate::spacetimes::{kerr_schild, Spacetime};
 use crate::{Error, Result};
 
 #[derive(Clone, Copy, Debug)]
@@ -39,6 +38,8 @@ impl ReissnerNordstrom {
         (self.q * self.q / r - self.m) / (r * r)
     }
 }
+
+impl Chart for ReissnerNordstrom {}
 
 impl Spacetime for ReissnerNordstrom {
     fn is_captured(&self, x: &Vec4) -> bool {

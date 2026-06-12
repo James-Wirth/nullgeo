@@ -1,8 +1,8 @@
-use nullgeo::metric::{fd_dg_inv, Mat4, Metric, Vec4};
-use nullgeo::metrics::kerr::Kerr;
-use nullgeo::metrics::minkowski::Minkowski;
-use nullgeo::metrics::reissner_nordstrom::ReissnerNordstrom;
-use nullgeo::metrics::schwarzschild::Schwarzschild;
+use nullgeo::geometry::{fd_partials, Mat4, Metric, Vec4};
+use nullgeo::spacetimes::kerr::Kerr;
+use nullgeo::spacetimes::minkowski::Minkowski;
+use nullgeo::spacetimes::reissner_nordstrom::ReissnerNordstrom;
+use nullgeo::spacetimes::schwarzschild::Schwarzschild;
 
 fn sample_points() -> Vec<Vec4> {
     vec![
@@ -65,7 +65,7 @@ fn reissner_nordstrom_fd_matches_analytic_dg_inv() {
     let rn = ReissnerNordstrom::new(1.0, 0.8).unwrap();
     for x in sample_points() {
         let analytic = rn.dg_inv(&x);
-        let fd = fd_dg_inv(|y| rn.g_inv(y), &x);
+        let fd = fd_partials(|y| rn.g_inv(y), &x);
         let scale = analytic.iter().map(|m| m.amax()).fold(1.0_f64, f64::max);
         for (mu, fd_mu) in fd.iter().enumerate() {
             assert_mat_close(
@@ -105,7 +105,7 @@ fn schwarzschild_fd_matches_analytic_dg_inv() {
     let schw = Schwarzschild::new(1.0).unwrap();
     for x in sample_points() {
         let analytic = schw.dg_inv(&x);
-        let fd = fd_dg_inv(|y| schw.g_inv(y), &x);
+        let fd = fd_partials(|y| schw.g_inv(y), &x);
         let scale = analytic.iter().map(|m| m.amax()).fold(1.0_f64, f64::max);
         for (mu, fd_mu) in fd.iter().enumerate() {
             assert_mat_close(
@@ -124,7 +124,7 @@ fn kerr_fd_matches_analytic_dg_inv() {
         let kerr = Kerr::new(1.0, spin).unwrap();
         for x in sample_points() {
             let analytic = kerr.dg_inv(&x);
-            let fd = fd_dg_inv(|y| kerr.g_inv(y), &x);
+            let fd = fd_partials(|y| kerr.g_inv(y), &x);
             let scale = analytic.iter().map(|m| m.amax()).fold(1.0_f64, f64::max);
             for (mu, fd_mu) in fd.iter().enumerate() {
                 assert_mat_close(
@@ -160,7 +160,7 @@ fn kerr_dg_inv_with_zero_spin_matches_schwarzschild() {
 fn minkowski_fd_dg_inv_is_zero() {
     let mink = Minkowski;
     for x in sample_points() {
-        let fd = fd_dg_inv(|y| mink.g_inv(y), &x);
+        let fd = fd_partials(|y| mink.g_inv(y), &x);
         for fd_mu in &fd {
             assert_mat_close(fd_mu, &Mat4::zeros(), 1e-14, "minkowski fd");
         }

@@ -1,6 +1,6 @@
+use crate::geometry::{raise, PhasePoint};
 use crate::integrator::{rk45_step, rk4_step, StepResult, Tolerances};
-use crate::metric::State4;
-use crate::spacetime::{SkySide, Spacetime};
+use crate::spacetimes::{SkySide, Spacetime};
 
 #[derive(Debug, Clone, Copy)]
 pub struct EquatorialAnnulus {
@@ -46,27 +46,27 @@ impl Default for TraceConfig {
 #[derive(Debug, Clone, Copy)]
 pub enum Termination {
     Captured {
-        state: State4,
+        state: PhasePoint,
     },
     Escaped {
         side: SkySide,
         dir: [f64; 3],
-        state: State4,
+        state: PhasePoint,
     },
     HitSurface {
-        state: State4,
+        state: PhasePoint,
     },
     MaxSteps {
-        state: State4,
+        state: PhasePoint,
     },
     Stalled {
-        state: State4,
+        state: PhasePoint,
     },
 }
 
 pub fn trace<S: Spacetime + ?Sized>(
     spacetime: &S,
-    start: State4,
+    start: PhasePoint,
     cfg: &TraceConfig,
 ) -> Termination {
     let (mut s, alignment) = spacetime.align_ray(start);
@@ -77,9 +77,10 @@ pub fn trace<S: Spacetime + ?Sized>(
             return Termination::Captured { state: s };
         }
         if spacetime.radius(&s.x) > cfg.escape_radius {
+            let v = raise(&spacetime.g_inv(&s.x), &s.p);
             return Termination::Escaped {
                 side: spacetime.sky_side(&s.x),
-                dir: alignment.apply(spacetime.cartesian_direction(&s)),
+                dir: alignment.apply(spacetime.embed_direction(&s.x, &v)),
                 state: s,
             };
         }
@@ -110,10 +111,10 @@ pub fn trace<S: Spacetime + ?Sized>(
 
 fn annulus_crossing<S: Spacetime + ?Sized>(
     spacetime: &S,
-    s0: &State4,
+    s0: &PhasePoint,
     step: &StepResult,
     annulus: &EquatorialAnnulus,
-) -> Option<State4> {
+) -> Option<PhasePoint> {
     let z0 = spacetime.equator_distance(&s0.x);
     let z1 = spacetime.equator_distance(&step.state.x);
     if z0 * z1 >= 0.0 {
@@ -127,7 +128,12 @@ fn annulus_crossing<S: Spacetime + ?Sized>(
     }
 
     let h = step.dl_used;
-    let sigma = hermite_root(z0, z1, h * step.dx_start[3], h * step.dx_end[3]);
+    let sigma = hermite_root(
+        z0,
+        z1,
+        h * spacetime.equator_distance_rate(&s0.x, &step.dx_start),
+        h * spacetime.equator_distance_rate(&step.state.x, &step.dx_end),
+    );
 
     let hit = rk4_step(spacetime, s0, sigma * h);
     let r_hit = spacetime.radius(&hit.x);

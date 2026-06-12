@@ -5,23 +5,17 @@
 //! - Geometric units (G = c = 1), because life is too short for anything else.
 //! - Coordinates: for flat space we use (t, x, y, z). For general metrics, there are no rules.
 
-pub mod camera;
-pub mod frame;
+pub mod geometry;
 pub mod integrator;
-pub mod metric;
-pub mod metrics;
 pub mod render;
-pub mod scene;
-pub mod spacetime;
+pub mod spacetimes;
 pub mod tracer;
 
-pub use camera::{Camera, CameraPose, CameraSpec};
-pub use metric::{Mat4, Metric, State4, Vec4};
-pub use render::{render, tone_map, ImageF32};
-pub use scene::disk::Disk;
-pub use scene::sky::{EquirectImage, SkyMap};
-pub use scene::Scene;
-pub use spacetime::{CircularOrbits, RayAlignment, SkySide, Spacetime};
+pub use geometry::{Chart, Mat4, Metric, PhasePoint, RayAlignment, Vec4};
+pub use render::{
+    render, tone_map, Camera, CameraPose, CameraSpec, Disk, EquirectImage, ImageF32, Scene, SkyMap,
+};
+pub use spacetimes::{CircularOrbits, SkySide, Spacetime};
 pub use tracer::{trace, EquatorialAnnulus, Termination, TraceConfig};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

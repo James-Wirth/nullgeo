@@ -1,11 +1,9 @@
 use std::f64::consts::{FRAC_PI_2, PI};
 
+use nullgeo::geometry::{fd_partials, raise, Mat4, Metric, PhasePoint, Vec4};
 use nullgeo::integrator::{hamiltonian, rk45_step, Tolerances};
-use nullgeo::metric::{fd_dg_inv, Mat4, Metric, State4, Vec4};
-use nullgeo::metrics::ellis::Ellis;
-use nullgeo::{
-    trace, Camera, CameraPose, CameraSpec, SkySide, Spacetime, Termination, TraceConfig,
-};
+use nullgeo::spacetimes::ellis::Ellis;
+use nullgeo::{trace, Camera, CameraPose, CameraSpec, Chart, SkySide, Termination, TraceConfig};
 
 fn sample_points() -> Vec<Vec4> {
     vec![
@@ -31,9 +29,9 @@ fn assert_mat_close(a: &Mat4, b: &Mat4, tol: f64, ctx: &str) {
     }
 }
 
-fn equatorial_ray(ellis: &Ellis, l0: f64, b: f64) -> State4 {
+fn equatorial_ray(ellis: &Ellis, l0: f64, b: f64) -> PhasePoint {
     let rho2 = ellis.throat_radius().powi(2) + l0 * l0;
-    State4 {
+    PhasePoint {
         x: Vec4::new(0.0, l0, FRAC_PI_2, 0.0),
         p: Vec4::new(1.0, -(1.0 - b * b / rho2).sqrt(), 0.0, b),
     }
@@ -58,7 +56,7 @@ fn fd_matches_analytic_dg_inv() {
     let ellis = Ellis::new(1.0).unwrap();
     for x in sample_points() {
         let analytic = ellis.dg_inv(&x);
-        let fd = fd_dg_inv(|y| ellis.g_inv(y), &x);
+        let fd = fd_partials(|y| ellis.g_inv(y), &x);
         let scale = analytic.iter().map(|m| m.amax()).fold(1.0_f64, f64::max);
         for (mu, fd_mu) in fd.iter().enumerate() {
             assert_mat_close(
@@ -82,15 +80,15 @@ fn ellis_rejects_nonpositive_throat() {
 fn alignment_maps_state_to_equator_and_rotates_directions_back() {
     let ellis = Ellis::new(1.0).unwrap();
     let states = [
-        State4 {
+        PhasePoint {
             x: Vec4::new(0.0, 8.0, 1.1, 0.6),
             p: Vec4::new(1.3, 0.4, 2.0, -1.5),
         },
-        State4 {
+        PhasePoint {
             x: Vec4::new(2.0, -5.0, 2.3, -1.9),
             p: Vec4::new(0.8, -0.9, -3.1, 0.7),
         },
-        State4 {
+        PhasePoint {
             x: Vec4::new(0.0, 30.0, 0.4, 1.0),
             p: Vec4::new(1.0, -1.0, 0.0, 0.0),
         },
@@ -110,8 +108,8 @@ fn alignment_maps_state_to_equator_and_rotates_directions_back() {
         let h = hamiltonian(&ellis, &s);
         assert!((h - h0).abs() < 1e-12, "H changed: {h0} -> {h}");
 
-        let d0 = ellis.cartesian_direction(&s0);
-        let d = alignment.apply(ellis.cartesian_direction(&s));
+        let d0 = ellis.embed_direction(&s0.x, &raise(&ellis.g_inv(&s0.x), &s0.p));
+        let d = alignment.apply(ellis.embed_direction(&s.x, &raise(&ellis.g_inv(&s.x), &s.p)));
         for i in 0..3 {
             assert!(
                 (d[i] - d0[i]).abs() < 1e-12,
@@ -121,8 +119,8 @@ fn alignment_maps_state_to_equator_and_rotates_directions_back() {
             );
         }
 
-        let p0 = ellis.cartesian_position(&s0.x);
-        let p = alignment.apply(ellis.cartesian_position(&s.x));
+        let p0 = ellis.embed(&s0.x);
+        let p = alignment.apply(ellis.embed(&s.x));
         for i in 0..3 {
             assert!(
                 (p[i] - p0[i]).abs() < 1e-12,
@@ -139,7 +137,7 @@ fn polar_ray_integrates_pole_free_and_conserves_energy_and_angular_momentum() {
     let ellis = Ellis::new(1.0).unwrap();
     let l0 = 30.0;
     let rho2 = 1.0 + l0 * l0;
-    let s0 = State4 {
+    let s0 = PhasePoint {
         x: Vec4::new(0.0, l0, FRAC_PI_2, 0.0),
         p: Vec4::new(1.0, -(1.0 - 9.0 / rho2).sqrt(), -3.0, 0.0),
     };
@@ -177,7 +175,7 @@ fn polar_ray_escapes_in_its_original_plane() {
     let ellis = Ellis::new(1.0).unwrap();
     let l0 = 30.0;
     let rho2 = 1.0 + l0 * l0;
-    let s0 = State4 {
+    let s0 = PhasePoint {
         x: Vec4::new(0.0, l0, FRAC_PI_2, 0.0),
         p: Vec4::new(1.0, -(1.0 - 9.0 / rho2).sqrt(), -3.0, 0.0),
     };
@@ -240,7 +238,7 @@ fn weak_deflection_matches_quadratic_formula() {
         max_steps: 1_000_000,
         ..TraceConfig::default()
     };
-    let d0 = ellis.cartesian_direction(&ray);
+    let d0 = ellis.embed_direction(&ray.x, &raise(&ellis.g_inv(&ray.x), &ray.p));
     let Termination::Escaped { side, dir, .. } = trace(&ellis, ray, &cfg) else {
         panic!("weak-field ray should escape");
     };

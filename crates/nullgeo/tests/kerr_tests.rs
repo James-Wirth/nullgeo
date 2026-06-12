@@ -1,9 +1,9 @@
-use nullgeo::frame::{build_coframe, make_null_covector};
+use nullgeo::geometry::{build_coframe, make_null_covector, raise};
+use nullgeo::geometry::{Mat4, Metric, PhasePoint, Vec4};
 use nullgeo::integrator::{hamiltonian, rk45_step, Tolerances};
-use nullgeo::metric::{Mat4, Metric, State4, Vec4};
-use nullgeo::metrics::kerr::Kerr;
-use nullgeo::metrics::schwarzschild::Schwarzschild;
-use nullgeo::{trace, Spacetime, Termination, TraceConfig};
+use nullgeo::spacetimes::kerr::Kerr;
+use nullgeo::spacetimes::schwarzschild::Schwarzschild;
+use nullgeo::{trace, Chart, Termination, TraceConfig};
 
 fn sample_points() -> Vec<Vec4> {
     vec![
@@ -31,17 +31,17 @@ fn assert_mat_close(a: &Mat4, b: &Mat4, tol: f64, ctx: &str) {
     }
 }
 
-fn backward_ray<M: Metric>(m: &M, x: Vec4, dir: [f64; 3], energy: f64) -> State4 {
+fn backward_ray<M: Metric>(m: &M, x: Vec4, dir: [f64; 3], energy: f64) -> PhasePoint {
     let coframe = build_coframe(m, &x).unwrap();
     let arriving = make_null_covector(&coframe, [-dir[0], -dir[1], -dir[2]], energy);
-    State4 { x, p: -arriving }
+    PhasePoint { x, p: -arriving }
 }
 
-fn xi(s: &State4) -> f64 {
+fn xi(s: &PhasePoint) -> f64 {
     -(s.x[1] * s.p[2] - s.x[2] * s.p[1]) / s.p[0]
 }
 
-fn equatorial_ray_with_xi(kerr: &Kerr, r0: f64, xi_target: f64) -> State4 {
+fn equatorial_ray_with_xi(kerr: &Kerr, r0: f64, xi_target: f64) -> PhasePoint {
     let x0 = Vec4::new(0.0, -r0, 0.0, 0.0);
     let ray_at = |alpha: f64| backward_ray(kerr, x0, [alpha.cos(), alpha.sin(), 0.0], 1.0);
     let sense = if xi(&ray_at(0.1)) * xi_target > 0.0 {
@@ -162,8 +162,8 @@ fn kerr_rejects_overspun_black_hole() {
 fn kerr_geodesic_conserves_energy_angular_momentum_and_hamiltonian() {
     let kerr = Kerr::new(1.0, 0.9).unwrap();
     let s0 = equatorial_ray_with_xi(&kerr, 15.0, 3.0);
-    let energy = |s: &State4| s.p[0];
-    let l_z = |s: &State4| s.x[1] * s.p[2] - s.x[2] * s.p[1];
+    let energy = |s: &PhasePoint| s.p[0];
+    let l_z = |s: &PhasePoint| s.x[1] * s.p[2] - s.x[2] * s.p[1];
 
     let tol = Tolerances {
         rtol: 1e-11,
@@ -246,7 +246,7 @@ fn prograde_rays_deflect_less_than_retrograde() {
 
     let deflection = |xi_target: f64| -> f64 {
         let ray = equatorial_ray_with_xi(&kerr, 30.0, xi_target);
-        let d0 = kerr.cartesian_direction(&ray);
+        let d0 = kerr.embed_direction(&ray.x, &raise(&kerr.g_inv(&ray.x), &ray.p));
         let Termination::Escaped { dir, .. } = trace(&kerr, ray, &cfg) else {
             panic!("ray with xi = {xi_target} should escape");
         };

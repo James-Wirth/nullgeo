@@ -1,6 +1,5 @@
-use crate::frame::{build_coframe_for, make_null_covector, metric_dot};
-use crate::metric::{Metric, State4, Vec4};
-use crate::spacetime::Spacetime;
+use crate::geometry::{build_coframe_for, inner, make_null_covector, Metric, PhasePoint, Vec4};
+use crate::spacetimes::Spacetime;
 use crate::{Error, Result};
 
 #[derive(Clone, Copy, Debug)]
@@ -110,14 +109,14 @@ impl Camera {
     pub fn observer_four_velocity<M: Metric + ?Sized>(&self, m: &M) -> Result<Vec4> {
         let [vx, vy, vz] = self.pose.velocity;
         let u = Vec4::new(1.0, vx, vy, vz);
-        let len_sq = metric_dot(&m.g(&self.pose.position), &u, &u);
+        let len_sq = inner(&m.g(&self.pose.position), &u, &u);
         if len_sq >= -1e-12 {
             return Err(Error::NonTimelikeObserver(self.pose.position));
         }
         Ok(u / (-len_sq).sqrt())
     }
 
-    pub fn pixel_rays<S: Spacetime + ?Sized>(&self, s: &S) -> Result<Vec<State4>> {
+    pub fn pixel_rays<S: Spacetime + ?Sized>(&self, s: &S) -> Result<Vec<PhasePoint>> {
         self.pixel_rays_at(s, (0.5, 0.5))
     }
 
@@ -125,10 +124,10 @@ impl Camera {
         &self,
         s: &S,
         subpixel: (f64, f64),
-    ) -> Result<Vec<State4>> {
-        let [forward, right, up] = self.view_basis(s.cartesian_position(&self.pose.position))?;
+    ) -> Result<Vec<PhasePoint>> {
+        let [forward, right, up] = self.view_basis(s.embed(&self.pose.position))?;
         let observer = self.observer_four_velocity(s)?;
-        let seed = |d: [f64; 3]| s.chart_direction(&self.pose.position, d);
+        let seed = |d: [f64; 3]| s.lift_direction(&self.pose.position, d);
         let coframe = build_coframe_for(
             s,
             &self.pose.position,
@@ -142,7 +141,7 @@ impl Camera {
             .into_iter()
             .map(|[f, r, u]| {
                 let arriving = make_null_covector(&coframe, [-f, -r, -u], energy);
-                State4 {
+                PhasePoint {
                     x: self.pose.position,
                     p: -arriving,
                 }

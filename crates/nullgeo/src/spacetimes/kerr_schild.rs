@@ -1,4 +1,4 @@
-use crate::metric::{Mat4, Vec4};
+use crate::geometry::{Mat4, Vec4};
 
 pub fn eta() -> Mat4 {
     Mat4::from_diagonal(&[-1.0, 1.0, 1.0, 1.0].into())

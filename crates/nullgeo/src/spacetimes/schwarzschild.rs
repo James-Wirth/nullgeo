@@ -1,6 +1,5 @@
-use crate::metric::{Mat4, Metric, Vec4};
-use crate::metrics::kerr_schild;
-use crate::spacetime::{cartesian_circular_four_velocity, CircularOrbits, Spacetime};
+use crate::geometry::{Chart, Mat4, Metric, Vec4};
+use crate::spacetimes::{cartesian_circular_four_velocity, kerr_schild, CircularOrbits, Spacetime};
 use crate::{Error, Result};
 
 #[derive(Clone, Copy, Debug)]
@@ -22,6 +21,8 @@ impl Schwarzschild {
         self.m
     }
 }
+
+impl Chart for Schwarzschild {}
 
 impl Spacetime for Schwarzschild {
     fn is_captured(&self, x: &Vec4) -> bool {

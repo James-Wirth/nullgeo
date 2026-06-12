@@ -1,4 +1,4 @@
-use super::metric::{Mat4, Metric, State4, Vec4};
+use crate::geometry::{inner, Metric, PhasePoint, Vec4};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Tolerances {
@@ -15,7 +15,7 @@ impl Default for Tolerances {
 }
 
 /// dx^mu/ds, dp_mu/ds.
-pub fn rhs_hamiltonian<M: Metric + ?Sized>(m: &M, s: &State4) -> (Vec4, Vec4) {
+pub fn rhs_hamiltonian<M: Metric + ?Sized>(m: &M, s: &PhasePoint) -> (Vec4, Vec4) {
     let ginv = m.g_inv(&s.x);
     let dx = ginv * s.p;
 
@@ -29,22 +29,22 @@ pub fn rhs_hamiltonian<M: Metric + ?Sized>(m: &M, s: &State4) -> (Vec4, Vec4) {
     (dx, dp)
 }
 
-pub fn rk4_step<M: Metric + ?Sized>(m: &M, s: &State4, dl: f64) -> State4 {
+pub fn rk4_step<M: Metric + ?Sized>(m: &M, s: &PhasePoint, dl: f64) -> PhasePoint {
     let (k1x, k1p) = rhs_hamiltonian(m, s);
 
-    let s2 = State4 {
+    let s2 = PhasePoint {
         x: s.x + 0.5 * dl * k1x,
         p: s.p + 0.5 * dl * k1p,
     };
     let (k2x, k2p) = rhs_hamiltonian(m, &s2);
 
-    let s3 = State4 {
+    let s3 = PhasePoint {
         x: s.x + 0.5 * dl * k2x,
         p: s.p + 0.5 * dl * k2p,
     };
     let (k3x, k3p) = rhs_hamiltonian(m, &s3);
 
-    let s4 = State4 {
+    let s4 = PhasePoint {
         x: s.x + dl * k3x,
         p: s.p + dl * k3p,
     };
@@ -53,12 +53,12 @@ pub fn rk4_step<M: Metric + ?Sized>(m: &M, s: &State4, dl: f64) -> State4 {
     let x = s.x + (dl / 6.0) * (k1x + 2.0 * k2x + 2.0 * k3x + k4x);
     let p = s.p + (dl / 6.0) * (k1p + 2.0 * k2p + 2.0 * k3p + k4p);
 
-    State4 { x, p }
+    PhasePoint { x, p }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct StepResult {
-    pub state: State4,
+    pub state: PhasePoint,
     pub dx_start: Vec4,
     pub dx_end: Vec4,
     pub err: f64,
@@ -121,7 +121,12 @@ const STEP_SAFETY: f64 = 0.9;
 const STEP_SHRINK_MIN: f64 = 0.2;
 const STEP_GROW_MAX: f64 = 5.0;
 
-pub fn rk45_step<M: Metric + ?Sized>(m: &M, s: &State4, dl: f64, tol: &Tolerances) -> StepResult {
+pub fn rk45_step<M: Metric + ?Sized>(
+    m: &M,
+    s: &PhasePoint,
+    dl: f64,
+    tol: &Tolerances,
+) -> StepResult {
     let mut kx = [Vec4::zeros(); 7];
     let mut kp = [Vec4::zeros(); 7];
     (kx[0], kp[0]) = rhs_hamiltonian(m, s);
@@ -164,7 +169,7 @@ pub fn rk45_step<M: Metric + ?Sized>(m: &M, s: &State4, dl: f64, tol: &Tolerance
     }
 }
 
-fn error_norm(s0: &State4, s5: &State4, s4: &State4, tol: &Tolerances) -> f64 {
+fn error_norm(s0: &PhasePoint, s5: &PhasePoint, s4: &PhasePoint, tol: &Tolerances) -> f64 {
     let mut sum = 0.0;
     for i in 0..4 {
         let sc_x = tol.atol + tol.rtol * s0.x[i].abs().max(s5.x[i].abs());
@@ -175,13 +180,6 @@ fn error_norm(s0: &State4, s5: &State4, s4: &State4, tol: &Tolerances) -> f64 {
     (sum / 8.0).sqrt()
 }
 
-pub fn hamiltonian<M: Metric + ?Sized>(m: &M, s: &State4) -> f64 {
-    let g_inv = m.g_inv(&s.x);
-    0.5 * quad_form(&g_inv, &s.p)
-}
-
-#[inline]
-fn quad_form(m: &Mat4, p: &Vec4) -> f64 {
-    let mp = m * p;
-    p.dot(&mp)
+pub fn hamiltonian<M: Metric + ?Sized>(m: &M, s: &PhasePoint) -> f64 {
+    0.5 * inner(&m.g_inv(&s.x), &s.p, &s.p)
 }

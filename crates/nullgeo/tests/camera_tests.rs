@@ -1,8 +1,8 @@
-use nullgeo::frame::{build_coframe_seeded, metric_dot};
+use nullgeo::geometry::{build_coframe_seeded, inner};
+use nullgeo::geometry::{Metric, Vec4};
 use nullgeo::integrator::hamiltonian;
-use nullgeo::metric::{Metric, Vec4};
-use nullgeo::metrics::minkowski::Minkowski;
-use nullgeo::metrics::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::minkowski::Minkowski;
+use nullgeo::spacetimes::schwarzschild::Schwarzschild;
 use nullgeo::{Camera, CameraPose, CameraSpec, Error};
 
 fn test_camera(res: (usize, usize)) -> Camera {
@@ -39,7 +39,7 @@ fn coframe_is_orthonormal() {
     for a in 0..4 {
         for b in 0..4 {
             let expected = if a == b { eta[a] } else { 0.0 };
-            let got = metric_dot(&g_inv, &coframe[a], &coframe[b]);
+            let got = inner(&g_inv, &coframe[a], &coframe[b]);
             assert!(
                 (got - expected).abs() < 1e-12,
                 "coframe[{a}].coframe[{b}] = {got}, expected {expected}"

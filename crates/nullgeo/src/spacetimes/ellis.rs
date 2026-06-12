@@ -1,7 +1,7 @@
 use std::f64::consts::FRAC_PI_2;
 
-use crate::metric::{Mat4, Metric, State4, Vec4};
-use crate::spacetime::{Mat3, RayAlignment, SkySide, Spacetime};
+use crate::geometry::{Chart, Mat3, Mat4, Metric, PhasePoint, RayAlignment, Vec4};
+use crate::spacetimes::{SkySide, Spacetime};
 use crate::{Error, Result};
 use nalgebra::Vector3;
 
@@ -72,26 +72,26 @@ impl Metric for Ellis {
     }
 }
 
-impl Spacetime for Ellis {
-    fn cartesian_position(&self, x: &Vec4) -> [f64; 3] {
+impl Chart for Ellis {
+    fn embed(&self, x: &Vec4) -> [f64; 3] {
         let rho = self.rho_sq(x[1]).sqrt();
         let p = rho * sphere_frame(x[2], x[3]).radial;
         [p[0], p[1], p[2]]
     }
 
-    fn radius(&self, x: &Vec4) -> f64 {
-        x[1].abs()
+    fn embed_direction(&self, x: &Vec4, v: &Vec4) -> [f64; 3] {
+        let l = x[1];
+        let rho = self.rho_sq(l).sqrt();
+        let st = x[2].sin();
+        let frame = sphere_frame(x[2], x[3]);
+        let d = (l / rho) * v[1] * frame.radial
+            + rho * v[2] * frame.polar
+            + rho * st * v[3] * frame.azimuthal;
+        let len = d.dot(&d).sqrt().max(1e-300);
+        [d[0] / len, d[1] / len, d[2] / len]
     }
 
-    fn sky_side(&self, x: &Vec4) -> SkySide {
-        if x[1] >= 0.0 {
-            SkySide::Primary
-        } else {
-            SkySide::Secondary
-        }
-    }
-
-    fn chart_direction(&self, x: &Vec4, d: [f64; 3]) -> Vec4 {
+    fn lift_direction(&self, x: &Vec4, d: [f64; 3]) -> Vec4 {
         let rho = self.rho_sq(x[1]).sqrt();
         let st = x[2].sin().max(1e-12);
         let frame = sphere_frame(x[2], x[3]);
@@ -104,20 +104,11 @@ impl Spacetime for Ellis {
         )
     }
 
-    fn cartesian_direction(&self, s: &State4) -> [f64; 3] {
-        let l = s.x[1];
-        let rho = self.rho_sq(l).sqrt();
-        let st = s.x[2].sin();
-        let frame = sphere_frame(s.x[2], s.x[3]);
-        let v = self.g_inv(&s.x) * s.p;
-        let d = (l / rho) * v[1] * frame.radial
-            + rho * v[2] * frame.polar
-            + rho * st * v[3] * frame.azimuthal;
-        let len = d.dot(&d).sqrt().max(1e-300);
-        [d[0] / len, d[1] / len, d[2] / len]
+    fn radius(&self, x: &Vec4) -> f64 {
+        x[1].abs()
     }
 
-    fn align_ray(&self, s: State4) -> (State4, RayAlignment) {
+    fn align_ray(&self, s: PhasePoint) -> (PhasePoint, RayAlignment) {
         let st = s.x[2].sin().max(1e-12);
         let frame = sphere_frame(s.x[2], s.x[3]);
         let e1 = frame.radial;
@@ -142,10 +133,20 @@ impl Spacetime for Ellis {
             e1[0], e2[0], e3[0], e1[1], e2[1], e3[1], e1[2], e2[2], e3[2],
         );
 
-        let aligned = State4 {
+        let aligned = PhasePoint {
             x: Vec4::new(s.x[0], s.x[1], FRAC_PI_2, 0.0),
             p: Vec4::new(s.p[0], s.p[1], 0.0, l_total),
         };
         (aligned, RayAlignment::from_rotation(rotation))
+    }
+}
+
+impl Spacetime for Ellis {
+    fn sky_side(&self, x: &Vec4) -> SkySide {
+        if x[1] >= 0.0 {
+            SkySide::Primary
+        } else {
+            SkySide::Secondary
+        }
     }
 }

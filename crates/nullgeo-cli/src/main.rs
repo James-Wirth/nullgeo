@@ -4,8 +4,8 @@ mod scene_file;
 use std::path::Path;
 
 use clap::{Args, Parser, Subcommand};
+use nullgeo::geometry::Vec4;
 use nullgeo::integrator::{hamiltonian, rk45_step, Tolerances};
-use nullgeo::metric::Vec4;
 use nullgeo::{render, tone_map, Camera, CameraPose, CameraSpec, Scene, SkyMap, TraceConfig};
 use scene_file::{
     build_camera, build_disk, build_sky, build_spacetime, build_trace_config, MetricKind,
@@ -126,7 +126,7 @@ fn run_propagate(args: &PropagateArgs) -> Result<(), String> {
         return Err("--pos and --dir each need three components, e.g. --pos=-20,0,0".into());
     }
     let x = Vec4::new(0.0, pos[0], pos[1], pos[2]);
-    let embedded = spacetime.cartesian_position(&x);
+    let embedded = spacetime.embed(&x);
     let look_at = [
         embedded[0] + dir[0],
         embedded[1] + dir[1],
@@ -177,8 +177,8 @@ fn run_propagate(args: &PropagateArgs) -> Result<(), String> {
     let write_err = |e: std::io::Error| format!("write failed: {e}");
 
     writeln!(out, "lambda,t,x,y,z,H").map_err(write_err)?;
-    let mut emit = |lambda: f64, s: &nullgeo::State4| -> Result<(), String> {
-        let [px, py, pz] = spacetime.cartesian_position(&s.x);
+    let mut emit = |lambda: f64, s: &nullgeo::PhasePoint| -> Result<(), String> {
+        let [px, py, pz] = spacetime.embed(&s.x);
         let h = hamiltonian(spacetime.as_ref(), s);
         writeln!(out, "{lambda},{},{px},{py},{pz},{h}", s.x[0]).map_err(write_err)
     };

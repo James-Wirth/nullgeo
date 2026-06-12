@@ -1,7 +1,15 @@
-use crate::camera::Camera;
-use crate::metric::State4;
-use crate::scene::Scene;
-use crate::spacetime::Spacetime;
+pub mod camera;
+pub mod disk;
+pub mod scene;
+pub mod sky;
+
+pub use camera::{Camera, CameraPose, CameraSpec};
+pub use disk::Disk;
+pub use scene::Scene;
+pub use sky::{EquirectImage, SkyMap};
+
+use crate::geometry::PhasePoint;
+use crate::spacetimes::Spacetime;
 use crate::tracer::{trace, EquatorialAnnulus, Termination, TraceConfig};
 use crate::{Error, Result};
 
@@ -39,7 +47,7 @@ pub fn render<S: Spacetime + Sync + ?Sized>(
 
     let u_obs = camera.observer_four_velocity(spacetime)?;
 
-    let shade = |ray: &State4| -> [f32; 3] {
+    let shade = |ray: &PhasePoint| -> [f32; 3] {
         match trace(spacetime, *ray, &cfg) {
             Termination::Escaped { side, dir, .. } => scene.sky_for(side).sample(dir),
             Termination::HitSurface { state } => {

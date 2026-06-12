@@ -1,7 +1,10 @@
-use crate::metric::{Mat4, Metric, Vec4};
-use crate::spacetime::Spacetime;
+use crate::geometry::{Chart, Mat4, Metric, Vec4};
+use crate::spacetimes::Spacetime;
 
+#[derive(Clone, Copy, Debug)]
 pub struct Minkowski;
+
+impl Chart for Minkowski {}
 
 impl Spacetime for Minkowski {}
 

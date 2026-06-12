@@ -1,19 +1,19 @@
 use std::f64::consts::PI;
 
-use nullgeo::frame::{build_coframe, make_null_covector};
+use nullgeo::geometry::{build_coframe, make_null_covector};
+use nullgeo::geometry::{Metric, PhasePoint, Vec4};
 use nullgeo::integrator::{rk45_step, Tolerances};
-use nullgeo::metric::{Metric, State4, Vec4};
-use nullgeo::metrics::minkowski::Minkowski;
-use nullgeo::metrics::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::minkowski::Minkowski;
+use nullgeo::spacetimes::schwarzschild::Schwarzschild;
 use nullgeo::{trace, Termination, TraceConfig};
 
-fn backward_ray<M: Metric>(m: &M, x: Vec4, dir: [f64; 3], energy: f64) -> State4 {
+fn backward_ray<M: Metric>(m: &M, x: Vec4, dir: [f64; 3], energy: f64) -> PhasePoint {
     let coframe = build_coframe(m, &x).unwrap();
     let arriving = make_null_covector(&coframe, [-dir[0], -dir[1], -dir[2]], energy);
-    State4 { x, p: -arriving }
+    PhasePoint { x, p: -arriving }
 }
 
-fn static_frame_direction<M: Metric>(m: &M, s: &State4) -> [f64; 3] {
+fn static_frame_direction<M: Metric>(m: &M, s: &PhasePoint) -> [f64; 3] {
     let coframe = build_coframe(m, &s.x).unwrap();
     let v = m.g_inv(&s.x) * s.p;
     let speed = (-coframe[0].dot(&v)).abs();
@@ -24,7 +24,7 @@ fn static_frame_direction<M: Metric>(m: &M, s: &State4) -> [f64; 3] {
     ]
 }
 
-fn aimed_ray(m: &Schwarzschild, r0: f64, b: f64) -> State4 {
+fn aimed_ray(m: &Schwarzschild, r0: f64, b: f64) -> PhasePoint {
     let alpha = (b * (1.0 - 2.0 * m.mass() / r0).sqrt() / r0).asin();
     backward_ray(
         m,
@@ -96,8 +96,8 @@ fn weak_field_deflection_matches_second_order_formula() {
 fn energy_and_angular_momentum_conserved_along_bent_ray() {
     let m = Schwarzschild::new(1.0).unwrap();
     let s0 = aimed_ray(&m, 15.0, 5.25);
-    let energy = |s: &State4| s.p[0];
-    let l_z = |s: &State4| s.x[1] * s.p[2] - s.x[2] * s.p[1];
+    let energy = |s: &PhasePoint| s.p[0];
+    let l_z = |s: &PhasePoint| s.x[1] * s.p[2] - s.x[2] * s.p[1];
 
     let tol = Tolerances {
         rtol: 1e-11,

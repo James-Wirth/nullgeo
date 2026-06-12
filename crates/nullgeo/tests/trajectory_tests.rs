@@ -1,12 +1,12 @@
+use nullgeo::geometry::{PhasePoint, Vec4};
 use nullgeo::integrator::rk4_step;
-use nullgeo::metric::{State4, Vec4};
-use nullgeo::metrics::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::schwarzschild::Schwarzschild;
 
 #[test]
 #[allow(clippy::excessive_precision)]
 fn b_6p11_ray_escapes() {
     let m = Schwarzschild::new(1.0).unwrap();
-    let mut s = State4 {
+    let mut s = PhasePoint {
         x: Vec4::new(0.0, -15.0, 0.0, 0.0),
         p: Vec4::new(
             -9.30949336251262527e-1,

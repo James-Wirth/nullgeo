@@ -1,9 +1,9 @@
+use nullgeo::geometry::{PhasePoint, Vec4};
 use nullgeo::integrator::{hamiltonian, rk45_step, rk4_step, Tolerances};
-use nullgeo::metric::{State4, Vec4};
-use nullgeo::metrics::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::schwarzschild::Schwarzschild;
 
-fn deflected_ray_start() -> State4 {
-    State4 {
+fn deflected_ray_start() -> PhasePoint {
+    PhasePoint {
         x: Vec4::new(0.0, -15.0, 0.0, 0.0),
         p: Vec4::new(
             -9.309_493_362_512_625e-1,
@@ -14,7 +14,7 @@ fn deflected_ray_start() -> State4 {
     }
 }
 
-fn integrate_rk4(m: &Schwarzschild, mut s: State4, dl: f64, total: f64) -> State4 {
+fn integrate_rk4(m: &Schwarzschild, mut s: PhasePoint, dl: f64, total: f64) -> PhasePoint {
     let n = (total / dl).round() as usize;
     for _ in 0..n {
         s = rk4_step(m, &s, dl);
@@ -22,7 +22,7 @@ fn integrate_rk4(m: &Schwarzschild, mut s: State4, dl: f64, total: f64) -> State
     s
 }
 
-fn integrate_rk45_fixed(m: &Schwarzschild, mut s: State4, dl: f64, total: f64) -> State4 {
+fn integrate_rk45_fixed(m: &Schwarzschild, mut s: PhasePoint, dl: f64, total: f64) -> PhasePoint {
     let tol = Tolerances {
         rtol: 1e30,
         atol: 1e30,
@@ -38,10 +38,10 @@ fn integrate_rk45_fixed(m: &Schwarzschild, mut s: State4, dl: f64, total: f64) -
 
 fn integrate_adaptive(
     m: &Schwarzschild,
-    mut s: State4,
+    mut s: PhasePoint,
     tol: &Tolerances,
     total: f64,
-) -> (State4, usize, usize) {
+) -> (PhasePoint, usize, usize) {
     let mut dl = 0.1_f64;
     let mut lambda = 0.0;
     let mut accepted = 0;
@@ -61,7 +61,7 @@ fn integrate_adaptive(
     (s, accepted, rejected)
 }
 
-fn state_distance(a: &State4, b: &State4) -> f64 {
+fn state_distance(a: &PhasePoint, b: &PhasePoint) -> f64 {
     let dx = a.x - b.x;
     let dp = a.p - b.p;
     (dx.dot(&dx) + dp.dot(&dp)).sqrt()
@@ -101,7 +101,7 @@ fn adaptive_matches_fine_reference() {
 #[test]
 fn adaptive_conserves_null_constraint_and_energy() {
     let m = Schwarzschild::new(1.0).unwrap();
-    let s0 = State4 {
+    let s0 = PhasePoint {
         x: Vec4::new(0.0, -15.0, 0.0, 0.0),
         p: Vec4::new(
             -9.309493362512625e-1,

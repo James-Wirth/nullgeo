@@ -1,18 +1,18 @@
-use nullgeo::frame::{build_coframe, make_null_covector};
+use nullgeo::geometry::{build_coframe, make_null_covector};
+use nullgeo::geometry::{Metric, PhasePoint, Vec4};
 use nullgeo::integrator::Tolerances;
-use nullgeo::metric::{Metric, State4, Vec4};
-use nullgeo::metrics::kerr::Kerr;
-use nullgeo::metrics::minkowski::Minkowski;
-use nullgeo::metrics::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::kerr::Kerr;
+use nullgeo::spacetimes::minkowski::Minkowski;
+use nullgeo::spacetimes::schwarzschild::Schwarzschild;
 use nullgeo::{
-    render, tone_map, trace, Camera, CameraPose, CameraSpec, Disk, EquatorialAnnulus,
+    render, tone_map, trace, Camera, CameraPose, CameraSpec, Chart, Disk, EquatorialAnnulus,
     EquirectImage, ImageF32, Scene, SkyMap, SkySide, Spacetime, Termination, TraceConfig,
 };
 
-fn backward_ray<M: Metric>(m: &M, x: Vec4, dir: [f64; 3], energy: f64) -> State4 {
+fn backward_ray<M: Metric>(m: &M, x: Vec4, dir: [f64; 3], energy: f64) -> PhasePoint {
     let coframe = build_coframe(m, &x).unwrap();
     let arriving = make_null_covector(&coframe, [-dir[0], -dir[1], -dir[2]], energy);
-    State4 { x, p: -arriving }
+    PhasePoint { x, p: -arriving }
 }
 
 fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
@@ -156,7 +156,7 @@ fn supersampled_render_averages_subpixel_sky_samples() {
     );
 }
 
-fn face_on_ray(m: &Schwarzschild, z0: f64, b_aim: f64) -> State4 {
+fn face_on_ray(m: &Schwarzschild, z0: f64, b_aim: f64) -> PhasePoint {
     let alpha = (b_aim / z0).atan();
     backward_ray(
         m,
