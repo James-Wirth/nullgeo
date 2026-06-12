@@ -3,8 +3,7 @@ use std::f64::consts::PI;
 use nullgeo::geometry::{build_coframe, make_null_covector};
 use nullgeo::geometry::{Metric, PhasePoint, Vec4};
 use nullgeo::integrator::{rk45_step, Tolerances};
-use nullgeo::spacetimes::minkowski::Minkowski;
-use nullgeo::spacetimes::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::{Minkowski, Schwarzschild};
 use nullgeo::{trace, Termination, TraceConfig};
 
 fn backward_ray<M: Metric>(m: &M, x: Vec4, dir: [f64; 3], energy: f64) -> PhasePoint {

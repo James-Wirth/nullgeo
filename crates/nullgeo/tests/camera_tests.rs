@@ -1,8 +1,7 @@
-use nullgeo::geometry::{build_coframe_seeded, inner};
+use nullgeo::geometry::{build_coframe_for, inner};
 use nullgeo::geometry::{Metric, Vec4};
 use nullgeo::integrator::hamiltonian;
-use nullgeo::spacetimes::minkowski::Minkowski;
-use nullgeo::spacetimes::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::{Minkowski, Schwarzschild};
 use nullgeo::{Camera, CameraPose, CameraSpec, Error};
 
 fn test_camera(res: (usize, usize)) -> Camera {
@@ -32,7 +31,7 @@ fn coframe_is_orthonormal() {
         Vec4::new(0.0, 0.2, 0.9, -0.4),
         Vec4::new(0.0, -0.1, 0.3, 1.0),
     ];
-    let coframe = build_coframe_seeded(&m, &x, seeds).unwrap();
+    let coframe = build_coframe_for(&m, &x, &Vec4::new(1.0, 0.0, 0.0, 0.0), seeds).unwrap();
 
     let g_inv = m.g_inv(&x);
     let eta = [-1.0, 1.0, 1.0, 1.0];

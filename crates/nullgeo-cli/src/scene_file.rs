@@ -2,11 +2,7 @@ use std::path::{Path, PathBuf};
 
 use nullgeo::geometry::Vec4;
 use nullgeo::integrator::Tolerances;
-use nullgeo::spacetimes::ellis::Ellis;
-use nullgeo::spacetimes::kerr::Kerr;
-use nullgeo::spacetimes::minkowski::Minkowski;
-use nullgeo::spacetimes::reissner_nordstrom::ReissnerNordstrom;
-use nullgeo::spacetimes::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::{Ellis, Kerr, Minkowski, ReissnerNordstrom, Schwarzschild};
 use nullgeo::{
     Camera, CameraPose, CameraSpec, Disk, EquirectImage, SkyMap, Spacetime, TraceConfig,
 };

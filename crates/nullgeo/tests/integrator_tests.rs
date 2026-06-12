@@ -1,6 +1,6 @@
 use nullgeo::geometry::{PhasePoint, Vec4};
 use nullgeo::integrator::{hamiltonian, rk45_step, rk4_step, Tolerances};
-use nullgeo::spacetimes::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::Schwarzschild;
 
 fn deflected_ray_start() -> PhasePoint {
     PhasePoint {

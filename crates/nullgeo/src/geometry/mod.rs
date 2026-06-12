@@ -1,9 +1,9 @@
-pub mod chart;
-pub mod frame;
-pub mod metric;
+mod chart;
+mod frame;
+mod metric;
 
 pub use chart::{Chart, RayAlignment};
-pub use frame::{build_coframe, build_coframe_for, build_coframe_seeded, make_null_covector};
+pub use frame::{build_coframe, build_coframe_for, make_null_covector};
 pub use metric::Metric;
 
 use nalgebra::{Matrix3, Matrix4, Vector4};

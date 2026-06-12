@@ -22,7 +22,6 @@ unused_imports = "deny"
 
 [workspace.dependencies]
 nalgebra = { version = "0.32", default-features = false, features = ["alloc"] }
-approx = "0.5"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 thiserror = "1"

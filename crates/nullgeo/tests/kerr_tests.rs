@@ -1,8 +1,7 @@
 use nullgeo::geometry::{build_coframe, make_null_covector, raise};
 use nullgeo::geometry::{Mat4, Metric, PhasePoint, Vec4};
 use nullgeo::integrator::{hamiltonian, rk45_step, Tolerances};
-use nullgeo::spacetimes::kerr::Kerr;
-use nullgeo::spacetimes::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::{Kerr, Schwarzschild};
 use nullgeo::{trace, Chart, Termination, TraceConfig};
 
 fn sample_points() -> Vec<Vec4> {

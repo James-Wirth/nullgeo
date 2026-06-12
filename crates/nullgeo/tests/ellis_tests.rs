@@ -2,7 +2,7 @@ use std::f64::consts::{FRAC_PI_2, PI};
 
 use nullgeo::geometry::{fd_partials, raise, Mat4, Metric, PhasePoint, Vec4};
 use nullgeo::integrator::{hamiltonian, rk45_step, Tolerances};
-use nullgeo::spacetimes::ellis::Ellis;
+use nullgeo::spacetimes::Ellis;
 use nullgeo::{trace, Camera, CameraPose, CameraSpec, Chart, SkySide, Termination, TraceConfig};
 
 fn sample_points() -> Vec<Vec4> {

@@ -1,6 +1,6 @@
 use nullgeo::geometry::{PhasePoint, Vec4};
 use nullgeo::integrator::rk4_step;
-use nullgeo::spacetimes::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::Schwarzschild;
 
 #[test]
 #[allow(clippy::excessive_precision)]

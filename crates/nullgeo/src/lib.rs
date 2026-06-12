@@ -18,8 +18,6 @@ pub use render::{
 pub use spacetimes::{CircularOrbits, SkySide, Spacetime};
 pub use tracer::{trace, EquatorialAnnulus, Termination, TraceConfig};
 
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(thiserror::Error, Debug)]

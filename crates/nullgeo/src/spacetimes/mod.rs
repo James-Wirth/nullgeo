@@ -1,12 +1,17 @@
-pub mod ellis;
-pub mod kerr;
+mod ellis;
+mod kerr;
 pub mod kerr_schild;
-pub mod minkowski;
-pub mod pullback;
-pub mod reissner_nordstrom;
-pub mod schwarzschild;
+mod minkowski;
+mod pullback;
+mod reissner_nordstrom;
+mod schwarzschild;
 
+pub use ellis::Ellis;
+pub use kerr::Kerr;
+pub use minkowski::Minkowski;
 pub use pullback::{Pullback, Rotation, Transition};
+pub use reissner_nordstrom::ReissnerNordstrom;
+pub use schwarzschild::Schwarzschild;
 
 use crate::geometry::{inner, Chart, Metric, Vec4};
 

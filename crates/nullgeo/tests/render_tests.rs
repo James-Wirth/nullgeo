@@ -1,9 +1,7 @@
 use nullgeo::geometry::{build_coframe, make_null_covector};
 use nullgeo::geometry::{Metric, PhasePoint, Vec4};
 use nullgeo::integrator::Tolerances;
-use nullgeo::spacetimes::kerr::Kerr;
-use nullgeo::spacetimes::minkowski::Minkowski;
-use nullgeo::spacetimes::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::{Kerr, Minkowski, Schwarzschild};
 use nullgeo::{
     render, tone_map, trace, Camera, CameraPose, CameraSpec, Chart, Disk, EquatorialAnnulus,
     EquirectImage, ImageF32, Scene, SkyMap, SkySide, Spacetime, Termination, TraceConfig,

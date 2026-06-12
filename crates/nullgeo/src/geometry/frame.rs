@@ -14,23 +14,16 @@ fn unit_spacelike(g: &Mat4, v: &Vec4, x: &Vec4) -> Result<Vec4> {
 }
 
 pub fn build_coframe<M: Metric + ?Sized>(m: &M, x: &Vec4) -> Result<[Vec4; 4]> {
-    build_coframe_seeded(
+    build_coframe_for(
         m,
         x,
+        &Vec4::new(1.0, 0.0, 0.0, 0.0),
         [
             Vec4::new(0.0, 1.0, 0.0, 0.0),
             Vec4::new(0.0, 0.0, 1.0, 0.0),
             Vec4::new(0.0, 0.0, 0.0, 1.0),
         ],
     )
-}
-
-pub fn build_coframe_seeded<M: Metric + ?Sized>(
-    m: &M,
-    x: &Vec4,
-    seeds: [Vec4; 3],
-) -> Result<[Vec4; 4]> {
-    build_coframe_for(m, x, &Vec4::new(1.0, 0.0, 0.0, 0.0), seeds)
 }
 
 pub fn build_coframe_for<M: Metric + ?Sized>(

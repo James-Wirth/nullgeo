@@ -1,8 +1,5 @@
 use nullgeo::geometry::{fd_partials, Mat4, Metric, Vec4};
-use nullgeo::spacetimes::kerr::Kerr;
-use nullgeo::spacetimes::minkowski::Minkowski;
-use nullgeo::spacetimes::reissner_nordstrom::ReissnerNordstrom;
-use nullgeo::spacetimes::schwarzschild::Schwarzschild;
+use nullgeo::spacetimes::{Kerr, Minkowski, ReissnerNordstrom, Schwarzschild};
 
 fn sample_points() -> Vec<Vec4> {
     vec![

@@ -24,14 +24,6 @@ impl<S, T: Transition> Pullback<S, T> {
     pub fn new(base: S, transition: T) -> Self {
         Self { base, transition }
     }
-
-    pub fn base(&self) -> &S {
-        &self.base
-    }
-
-    pub fn transition(&self) -> &T {
-        &self.transition
-    }
 }
 
 impl<S: Metric, T: Transition> Metric for Pullback<S, T> {

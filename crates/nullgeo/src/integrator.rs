@@ -15,7 +15,7 @@ impl Default for Tolerances {
 }
 
 /// dx^mu/ds, dp_mu/ds.
-pub fn rhs_hamiltonian<M: Metric + ?Sized>(m: &M, s: &PhasePoint) -> (Vec4, Vec4) {
+fn rhs_hamiltonian<M: Metric + ?Sized>(m: &M, s: &PhasePoint) -> (Vec4, Vec4) {
     let ginv = m.g_inv(&s.x);
     let dx = ginv * s.p;
 

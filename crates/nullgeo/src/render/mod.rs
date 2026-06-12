@@ -1,7 +1,7 @@
-pub mod camera;
-pub mod disk;
-pub mod scene;
-pub mod sky;
+mod camera;
+mod disk;
+mod scene;
+mod sky;
 
 pub use camera::{Camera, CameraPose, CameraSpec};
 pub use disk::Disk;

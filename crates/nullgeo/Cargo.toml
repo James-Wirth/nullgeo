@@ -23,5 +23,3 @@ nalgebra.workspace = true
 thiserror.workspace = true
 rayon = { workspace = true, optional = true }
 
-[dev-dependencies]
-approx.workspace = true

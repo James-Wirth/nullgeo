@@ -3,9 +3,7 @@ use std::f64::consts::FRAC_PI_2;
 use nullgeo::geometry::{
     build_coframe, fd_partials, make_null_covector, Mat4, Metric, PhasePoint, Vec4,
 };
-use nullgeo::spacetimes::kerr::Kerr;
-use nullgeo::spacetimes::schwarzschild::Schwarzschild;
-use nullgeo::spacetimes::{Pullback, Rotation, Transition};
+use nullgeo::spacetimes::{Kerr, Pullback, Rotation, Schwarzschild, Transition};
 use nullgeo::{trace, Chart, EquatorialAnnulus, Spacetime, Termination, TraceConfig};
 
 fn sample_points() -> Vec<Vec4> {

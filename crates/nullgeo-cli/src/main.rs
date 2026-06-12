@@ -97,7 +97,6 @@ struct ShadowArgs {
 }
 
 fn main() {
-    env_logger::init();
     let cli = Cli::parse();
 
     let result = match cli.command {
