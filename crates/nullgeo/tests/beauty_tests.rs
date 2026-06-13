@@ -62,9 +62,10 @@ fn face_on_blackbody_disk_shades_planck_of_g_times_t() {
     let image = shade_beauty(&buffer, &scene);
 
     let center = 4;
-    let RayOutcome::DiskHit { radius, g: Some(g) } = buffer.primary(center).outcome else {
+    let Some(crossing) = buffer.primary(center).first_crossing else {
         panic!("center pixel should hit the disk");
     };
+    let (radius, g) = (crossing.radius, crossing.g.unwrap());
 
     let g_predicted = (1.0 - 3.0 / radius).sqrt() / (1.0 - 2.0 / z_cam).sqrt();
     assert!((g - g_predicted).abs() < 1e-5 * g_predicted);
@@ -99,6 +100,9 @@ fn suppressing_redshift_color_keeps_the_emitted_chromaticity() {
             t_in,
             doppler_beaming: true,
             redshift_color: false,
+            optical_depth: f64::INFINITY,
+            aspect_ratio: 0.0,
+            edge_taper: 0.0,
         },
     };
     let scene = black_sky_scene(suppressed);
@@ -112,9 +116,10 @@ fn suppressing_redshift_color_keeps_the_emitted_chromaticity() {
     let image = shade_beauty(&buffer, &scene);
 
     let center = 4;
-    let RayOutcome::DiskHit { radius, .. } = buffer.primary(center).outcome else {
+    let Some(crossing) = buffer.primary(center).first_crossing else {
         panic!("center pixel should hit the disk");
     };
+    let radius = crossing.radius;
 
     let t_emitted = shakura_sunyaev_temperature(t_in, 6.0, radius);
     let unshifted = xyz_to_linear_srgb(planck_xyz(t_emitted));
@@ -137,6 +142,9 @@ fn edge_on_kerr_asymmetries() -> (f64, f64) {
             t_in: 1.0e4,
             doppler_beaming,
             redshift_color: true,
+            optical_depth: f64::INFINITY,
+            aspect_ratio: 0.0,
+            edge_taper: 0.0,
         },
     };
     let cfg = TraceConfig {
@@ -147,10 +155,11 @@ fn edge_on_kerr_asymmetries() -> (f64, f64) {
 
     let scene_on = black_sky_scene(disk_with(true));
     let scene_off = black_sky_scene(disk_with(false));
-    let buffer = trace_geometry(&kerr, &cam, &scene_on, &cfg).unwrap();
+    let buffer_on = trace_geometry(&kerr, &cam, &scene_on, &cfg).unwrap();
+    let buffer_off = trace_geometry(&kerr, &cam, &scene_off, &cfg).unwrap();
     (
-        half_ratio(&shade_beauty(&buffer, &scene_on)),
-        half_ratio(&shade_beauty(&buffer, &scene_off)),
+        half_ratio(&shade_beauty(&buffer_on, &scene_on)),
+        half_ratio(&shade_beauty(&buffer_off, &scene_off)),
     )
 }
 

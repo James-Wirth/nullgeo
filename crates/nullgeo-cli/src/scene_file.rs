@@ -79,6 +79,9 @@ pub struct DiskSection {
     pub t_in: Option<f64>,
     pub doppler_beaming: Option<bool>,
     pub redshift_color: Option<bool>,
+    pub optical_depth: Option<f64>,
+    pub aspect_ratio: Option<f64>,
+    pub edge_taper: Option<f64>,
     pub emissivity_index: Option<f64>,
     pub g_power: Option<f64>,
 }
@@ -97,6 +100,7 @@ pub struct SkySection {
     pub checker_deg: Option<f64>,
     pub image: Option<PathBuf>,
     pub uniform: Option<[f32; 3]>,
+    pub intensity: Option<f32>,
     pub graticule_deg: Option<f64>,
     pub graticule_width_deg: Option<f64>,
 }
@@ -287,8 +291,21 @@ pub fn build_camera(c: &CameraSection) -> Result<Camera, String> {
 }
 
 pub fn build_sky(s: &SkySection, base: &Path) -> Result<SkyMap, String> {
+    let intensity = match s.intensity {
+        None => 1.0,
+        Some(v) if v > 0.0 && v.is_finite() => v,
+        Some(v) => return Err(format!("sky intensity {v} must be positive and finite")),
+    };
+    let intensity_only_on_image_or_uniform = "intensity applies to image and uniform skies only";
+    if s.intensity.is_some() && s.graticule_deg.is_some() {
+        return Err(intensity_only_on_image_or_uniform.into());
+    }
+
     let background = match (s.checker_deg, &s.image, s.uniform) {
         (Some(angular_size_deg), None, None) => {
+            if s.intensity.is_some() {
+                return Err(intensity_only_on_image_or_uniform.into());
+            }
             Some(SkyMap::checker(angular_size_deg).map_err(|e| e.to_string())?)
         }
         (None, Some(path), None) => {
@@ -298,12 +315,17 @@ pub fn build_sky(s: &SkySection, base: &Path) -> Result<SkyMap, String> {
                 base.join(path)
             };
             let img = image::open(&full)
-                .map_err(|e| format!("cannot load sky image {}: {e}", full.display()))?
-                .to_rgb32f();
+                .map_err(|e| format!("cannot load sky image {}: {e}", full.display()))?;
+            let linear = matches!(
+                img.color(),
+                image::ColorType::Rgb32F | image::ColorType::Rgba32F
+            );
+            let img = img.to_rgb32f();
             let (w, h) = img.dimensions();
+            let encode = |c: f32| if linear { c } else { c.powf(2.2) } * intensity;
             let data = img
                 .pixels()
-                .map(|p| [p.0[0].powf(2.2), p.0[1].powf(2.2), p.0[2].powf(2.2)])
+                .map(|p| [encode(p.0[0]), encode(p.0[1]), encode(p.0[2])])
                 .collect();
             Some(
                 EquirectImage::new(w as usize, h as usize, data)
@@ -311,7 +333,7 @@ pub fn build_sky(s: &SkySection, base: &Path) -> Result<SkyMap, String> {
                     .map_err(|e| e.to_string())?,
             )
         }
-        (None, None, Some(color)) => Some(SkyMap::Uniform(color)),
+        (None, None, Some(color)) => Some(SkyMap::Uniform(color.map(|c| c * intensity))),
         (None, None, None) => None,
         _ => return Err("sky must set at most one of checker_deg, image, uniform".into()),
     };
@@ -341,17 +363,44 @@ pub fn build_disk(d: &DiskSection) -> Result<Disk, String> {
                     "emissivity_index and g_power apply to the stylized disk model only".into(),
                 );
             }
+            let optical_depth = d.optical_depth.unwrap_or(2.5);
+            if !(optical_depth > 0.0 && optical_depth.is_finite()) {
+                return Err(format!(
+                    "disk optical_depth must be positive and finite, got {optical_depth}"
+                ));
+            }
+            let aspect_ratio = d.aspect_ratio.unwrap_or(0.05);
+            if !(aspect_ratio >= 0.0 && aspect_ratio.is_finite()) {
+                return Err(format!(
+                    "disk aspect_ratio must be non-negative and finite, got {aspect_ratio}"
+                ));
+            }
+            let edge_taper = d.edge_taper.unwrap_or(0.2);
+            if !(0.0..1.0).contains(&edge_taper) {
+                return Err(format!(
+                    "disk edge_taper must be in [0, 1), got {edge_taper}"
+                ));
+            }
             DiskModel::Blackbody {
                 t_in: d.t_in.unwrap_or(10_000.0),
                 doppler_beaming: d.doppler_beaming.unwrap_or(true),
                 redshift_color: d.redshift_color.unwrap_or(true),
+                optical_depth,
+                aspect_ratio,
+                edge_taper,
             }
         }
         DiskModelKind::Stylized => {
-            if d.t_in.is_some() || d.doppler_beaming.is_some() || d.redshift_color.is_some() {
+            if d.t_in.is_some()
+                || d.doppler_beaming.is_some()
+                || d.redshift_color.is_some()
+                || d.optical_depth.is_some()
+                || d.aspect_ratio.is_some()
+                || d.edge_taper.is_some()
+            {
                 return Err(
-                    "t_in, doppler_beaming and redshift_color apply to the blackbody disk model \
-                     only"
+                    "t_in, doppler_beaming, redshift_color, optical_depth, aspect_ratio and \
+                     edge_taper apply to the blackbody disk model only"
                         .into(),
                 );
             }
@@ -560,6 +609,9 @@ mod tests {
             t_in: None,
             doppler_beaming: None,
             redshift_color: None,
+            optical_depth: None,
+            aspect_ratio: None,
+            edge_taper: None,
             emissivity_index: None,
             g_power: None,
         }
@@ -574,7 +626,9 @@ mod tests {
                 t_in,
                 doppler_beaming: true,
                 redshift_color: true,
-            } if t_in == 10_000.0
+                aspect_ratio,
+                ..
+            } if t_in == 10_000.0 && aspect_ratio > 0.0
         ));
 
         let stylized = DiskSection {
@@ -618,9 +672,125 @@ mod tests {
             checker_deg: None,
             image: None,
             uniform: None,
+            intensity: None,
             graticule_deg: None,
             graticule_width_deg: None,
         }
+    }
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("nullgeo_sky_{tag}_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn equirect_of(sky: SkyMap) -> EquirectImage {
+        match sky {
+            SkyMap::Equirect(image) => image,
+            other => panic!("expected an equirect sky, got {other:?}"),
+        }
+    }
+
+    fn image_sky(path: &Path, intensity: Option<f32>) -> SkySection {
+        SkySection {
+            image: Some(path.to_path_buf()),
+            intensity,
+            ..sky_section()
+        }
+    }
+
+    #[test]
+    fn per_format_linearity_gammas_8bit_and_passes_hdr_through() {
+        let dir = temp_dir("linearity");
+
+        let png_path = dir.join("ldr.png");
+        let mut ldr: image::RgbImage = image::ImageBuffer::new(2, 1);
+        ldr.put_pixel(0, 0, image::Rgb([64, 128, 192]));
+        ldr.put_pixel(1, 0, image::Rgb([32, 200, 255]));
+        ldr.save(&png_path).unwrap();
+
+        let exr_path = dir.join("hdr.exr");
+        let mut hdr: image::Rgb32FImage = image::ImageBuffer::new(2, 1);
+        hdr.put_pixel(0, 0, image::Rgb([0.25, 0.5, 2.0]));
+        hdr.put_pixel(1, 0, image::Rgb([3.0, 0.75, 1.5]));
+        hdr.save(&exr_path).unwrap();
+
+        let png = equirect_of(build_sky(&image_sky(&png_path, None), &dir).unwrap());
+        for (x, bytes) in [(0usize, [64u8, 128, 192]), (1, [32, 200, 255])] {
+            let texel = png.texel(x, 0);
+            for (c, &byte) in bytes.iter().enumerate() {
+                let expected = (byte as f32 / 255.0).powf(2.2);
+                assert!(
+                    (texel[c] - expected).abs() < 1e-6,
+                    "png texel {x} channel {c}: {} vs {expected}",
+                    texel[c]
+                );
+            }
+        }
+
+        let exr = equirect_of(build_sky(&image_sky(&exr_path, None), &dir).unwrap());
+        assert_eq!(exr.texel(0, 0), [0.25, 0.5, 2.0]);
+        assert_eq!(exr.texel(1, 0), [3.0, 0.75, 1.5]);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn intensity_scales_image_and_uniform() {
+        let dir = temp_dir("intensity_scale");
+
+        let exr_path = dir.join("hdr.exr");
+        let mut hdr: image::Rgb32FImage = image::ImageBuffer::new(2, 1);
+        hdr.put_pixel(0, 0, image::Rgb([0.5, 1.0, 2.0]));
+        hdr.put_pixel(1, 0, image::Rgb([4.0, 0.25, 0.75]));
+        hdr.save(&exr_path).unwrap();
+
+        let scaled = equirect_of(build_sky(&image_sky(&exr_path, Some(0.5)), &dir).unwrap());
+        assert_eq!(scaled.texel(0, 0), [0.25, 0.5, 1.0]);
+        assert_eq!(scaled.texel(1, 0), [2.0, 0.125, 0.375]);
+
+        let uniform = SkySection {
+            uniform: Some([0.2, 0.4, 0.6]),
+            intensity: Some(0.5),
+            ..sky_section()
+        };
+        assert!(matches!(
+            build_sky(&uniform, &dir).unwrap(),
+            SkyMap::Uniform(c) if c == [0.1, 0.2, 0.3]
+        ));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn intensity_rejected_on_diagnostic_skies() {
+        let checker = SkySection {
+            checker_deg: Some(12.0),
+            intensity: Some(0.5),
+            ..sky_section()
+        };
+        assert!(build_sky(&checker, Path::new(".")).is_err());
+
+        let graticule = SkySection {
+            graticule_deg: Some(10.0),
+            intensity: Some(0.5),
+            ..sky_section()
+        };
+        assert!(build_sky(&graticule, Path::new(".")).is_err());
+    }
+
+    #[test]
+    fn intensity_must_be_positive_and_finite() {
+        let uniform = |intensity| SkySection {
+            uniform: Some([0.5, 0.5, 0.5]),
+            intensity: Some(intensity),
+            ..sky_section()
+        };
+        assert!(build_sky(&uniform(0.0), Path::new(".")).is_err());
+        assert!(build_sky(&uniform(-1.0), Path::new(".")).is_err());
+        assert!(build_sky(&uniform(f32::NAN), Path::new(".")).is_err());
+        assert!(build_sky(&uniform(f32::INFINITY), Path::new(".")).is_err());
+        assert!(build_sky(&uniform(0.5), Path::new(".")).is_ok());
     }
 
     #[test]

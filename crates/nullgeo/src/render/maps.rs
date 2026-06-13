@@ -21,9 +21,9 @@ impl MapQuantity {
     fn extract(self, info: &RayInfo) -> f64 {
         match self {
             MapQuantity::Classification => class_index(info.class()) as f64,
-            MapQuantity::Redshift => match info.outcome {
-                RayOutcome::DiskHit { g: Some(g), .. } => g,
-                _ => f64::NAN,
+            MapQuantity::Redshift => match info.first_crossing {
+                Some(crossing) => crossing.g.unwrap_or(f64::NAN),
+                None => f64::NAN,
             },
             MapQuantity::ImageOrder => info.stats.equatorial_crossings as f64,
             MapQuantity::MinRadius => info.stats.min_radius,

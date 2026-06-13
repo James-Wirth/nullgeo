@@ -17,6 +17,9 @@ jitter = true
 [disk]
 r_out = 20.0
 t_in = 10000.0
+optical_depth = 2.5
+aspect_ratio = 0.05
+edge_taper = 0.25
 
 [sky]
 uniform = [0.0, 0.0, 0.0]

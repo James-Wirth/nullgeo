@@ -196,9 +196,10 @@ fn redshift_map_matches_face_on_formula() {
     let buffer = trace_geometry(&m, &camera, &scene, &cfg).unwrap();
     let center = 4;
     let info = buffer.primary(center);
-    let RayOutcome::DiskHit { radius, g: Some(g) } = info.outcome else {
+    let Some(crossing) = info.first_crossing else {
         panic!("center pixel should hit the disk, got {:?}", info.outcome);
     };
+    let (radius, g) = (crossing.radius, crossing.g.unwrap());
     assert!((6.0..=40.0).contains(&radius));
 
     let predicted = (1.0 - 3.0 / radius).sqrt() / (1.0 - 2.0 / z_cam).sqrt();

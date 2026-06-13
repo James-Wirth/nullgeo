@@ -120,6 +120,14 @@ impl EquirectImage {
         })
     }
 
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.width, self.height)
+    }
+
+    pub fn texel(&self, x: usize, y: usize) -> [f32; 3] {
+        self.data[y * self.width + x]
+    }
+
     pub fn sample(&self, u: f64, v: f64) -> [f32; 3] {
         let x = u * self.width as f64 - 0.5;
         let y = (v * self.height as f64 - 0.5).clamp(0.0, (self.height - 1) as f64);

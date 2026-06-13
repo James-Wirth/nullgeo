@@ -16,12 +16,13 @@ pub use render::{
     class_color, colorize, planck_xyz, quantize16, quantize8, render, shade_beauty, shade_map,
     shakura_sunyaev_peak_radius, shakura_sunyaev_temperature, tone_map, tone_map_curve,
     trace_geometry, xyz_to_linear_srgb, Camera, CameraPose, CameraSpec, Colormap, Disk, DiskModel,
-    EquirectImage, GeometryBuffer, ImageF32, MapField, MapQuantity, RayClass, RayInfo, RayOutcome,
-    Scene, SkyMap, ToneCurve,
+    DiskVolume, EquirectImage, GeometryBuffer, ImageF32, MapField, MapQuantity, RayClass, RayInfo,
+    RayOutcome, Scene, SkyMap, ToneCurve,
 };
 pub use spacetimes::{CircularOrbits, SkySide, Spacetime};
 pub use tracer::{
-    trace, trace_with_stats, EquatorialAnnulus, Termination, TraceConfig, TraceStats,
+    trace, trace_disk, trace_with_stats, DiskCrossing, DiskTrace, EquatorialAnnulus, Termination,
+    TraceConfig, TraceStats,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;

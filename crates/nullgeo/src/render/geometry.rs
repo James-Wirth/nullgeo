@@ -1,9 +1,15 @@
 use super::camera::Camera;
 use super::scene::Scene;
+use super::DiskShader;
 use crate::geometry::PhasePoint;
 use crate::spacetimes::{SkySide, Spacetime};
-use crate::tracer::{trace_with_stats, EquatorialAnnulus, Termination, TraceConfig, TraceStats};
+use crate::tracer::{
+    trace_disk, trace_with_stats, DiskCrossing, EquatorialAnnulus, Termination, TraceConfig,
+    TraceStats,
+};
 use crate::{Error, Result};
+
+const DISK_OPACITY_THRESHOLD: f32 = 0.5;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RayClass {
@@ -23,22 +29,25 @@ pub enum RayOutcome {
         dir: [f64; 3],
         g: Option<f64>,
     },
-    DiskHit {
-        radius: f64,
-        g: Option<f64>,
-    },
     MaxSteps,
     Stalled,
+    Saturated,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct RayInfo {
     pub outcome: RayOutcome,
     pub stats: TraceStats,
+    pub disk_radiance: [f32; 3],
+    pub disk_transmission: f32,
+    pub first_crossing: Option<DiskCrossing>,
 }
 
 impl RayInfo {
     pub fn class(&self) -> RayClass {
+        if self.disk_transmission < DISK_OPACITY_THRESHOLD {
+            return RayClass::Disk;
+        }
         match self.outcome {
             RayOutcome::Captured => RayClass::Captured,
             RayOutcome::Escaped {
@@ -49,9 +58,9 @@ impl RayInfo {
                 side: SkySide::Secondary,
                 ..
             } => RayClass::EscapedSecondary,
-            RayOutcome::DiskHit { .. } => RayClass::Disk,
             RayOutcome::MaxSteps => RayClass::MaxSteps,
             RayOutcome::Stalled => RayClass::Stalled,
+            RayOutcome::Saturated => RayClass::Disk,
         }
     }
 }
@@ -109,6 +118,7 @@ pub fn trace_geometry<S: Spacetime + Sync + ?Sized>(
     cfg: &TraceConfig,
 ) -> Result<GeometryBuffer> {
     let mut cfg = *cfg;
+    let mut disk_volume = None;
     if let Some(disk) = &scene.disk {
         let orbits = spacetime.circular_orbits().ok_or_else(|| {
             Error::InvalidArg("this spacetime does not support an equatorial disk".into())
@@ -131,13 +141,13 @@ pub fn trace_geometry<S: Spacetime + Sync + ?Sized>(
             r_in,
             r_out: disk.r_out,
         });
+        disk_volume = Some((disk.volume(r_in), DiskShader::new(scene, Some(r_in))));
     }
 
     let u_obs = camera.observer_four_velocity(spacetime)?;
 
-    let probe = |ray: &PhasePoint| -> RayInfo {
-        let (termination, stats) = trace_with_stats(spacetime, *ray, &cfg);
-        let outcome = match termination {
+    let background = |termination: Termination, ray: &PhasePoint| -> RayOutcome {
+        match termination {
             Termination::Captured { .. } => RayOutcome::Captured,
             Termination::Escaped { side, dir, state } => {
                 let killing_energy = state.p[0];
@@ -145,20 +155,37 @@ pub fn trace_geometry<S: Spacetime + Sync + ?Sized>(
                     .then(|| ray.p.dot(&u_obs) / killing_energy);
                 RayOutcome::Escaped { side, dir, g }
             }
-            Termination::HitSurface { state } => {
-                let g = spacetime
-                    .circular_orbits()
-                    .and_then(|orbits| orbits.four_velocity(&state.x))
-                    .map(|u_em| ray.p.dot(&u_obs) / state.p.dot(&u_em));
-                RayOutcome::DiskHit {
-                    radius: spacetime.radius(&state.x),
-                    g,
-                }
-            }
             Termination::MaxSteps { .. } => RayOutcome::MaxSteps,
             Termination::Stalled { .. } => RayOutcome::Stalled,
-        };
-        RayInfo { outcome, stats }
+            Termination::Saturated { .. } | Termination::HitSurface { .. } => RayOutcome::Saturated,
+        }
+    };
+
+    let probe = |ray: &PhasePoint| -> RayInfo {
+        match &disk_volume {
+            Some((volume, shader)) => {
+                let numerator = ray.p.dot(&u_obs);
+                let emission = |radius: f64, g: Option<f64>| shader.emit(radius, g);
+                let result = trace_disk(spacetime, *ray, &cfg, volume, numerator, &emission);
+                RayInfo {
+                    outcome: background(result.termination, ray),
+                    stats: result.stats,
+                    disk_radiance: result.disk_radiance,
+                    disk_transmission: result.disk_transmission,
+                    first_crossing: result.first_crossing,
+                }
+            }
+            None => {
+                let (termination, stats) = trace_with_stats(spacetime, *ray, &cfg);
+                RayInfo {
+                    outcome: background(termination, ray),
+                    stats,
+                    disk_radiance: [0.0; 3],
+                    disk_transmission: 1.0,
+                    first_crossing: None,
+                }
+            }
+        }
     };
 
     let (width, height) = camera.spec.res;

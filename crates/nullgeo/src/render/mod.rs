@@ -8,7 +8,9 @@ mod sky;
 
 pub use camera::{Camera, CameraPose, CameraSpec};
 pub use color::{planck_xyz, quantize16, quantize8, tone_map_curve, xyz_to_linear_srgb, ToneCurve};
-pub use disk::{shakura_sunyaev_peak_radius, shakura_sunyaev_temperature, Disk, DiskModel};
+pub use disk::{
+    shakura_sunyaev_peak_radius, shakura_sunyaev_temperature, Disk, DiskModel, DiskVolume,
+};
 pub use geometry::{trace_geometry, GeometryBuffer, RayClass, RayInfo, RayOutcome};
 pub use maps::{class_color, colorize, shade_map, Colormap, MapField, MapQuantity};
 pub use scene::Scene;
@@ -37,13 +39,12 @@ pub fn render<S: Spacetime + Sync + ?Sized>(
 
 pub fn shade_beauty(buffer: &GeometryBuffer, scene: &Scene) -> ImageF32 {
     let pixels = buffer.pixel_count();
-    let disk_shader = DiskShader::new(scene, buffer.annulus.map(|annulus| annulus.r_in));
 
     let mut data = vec![[0.0f32; 3]; pixels];
     for (pixel, out) in data.iter_mut().enumerate() {
         let weight = 1.0 / buffer.sample_count(pixel) as f32;
         buffer.for_each_sample(pixel, |info| {
-            let color = shade_ray(info, scene, &disk_shader);
+            let color = shade_ray(info, scene);
             for c in 0..3 {
                 out[c] += weight * color[c];
             }
@@ -57,7 +58,7 @@ pub fn shade_beauty(buffer: &GeometryBuffer, scene: &Scene) -> ImageF32 {
     }
 }
 
-enum DiskShader {
+pub(crate) enum DiskShader {
     None,
     Stylized {
         r_in: f64,
@@ -74,7 +75,7 @@ enum DiskShader {
 }
 
 impl DiskShader {
-    fn new(scene: &Scene, r_in: Option<f64>) -> Self {
+    pub(crate) fn new(scene: &Scene, r_in: Option<f64>) -> Self {
         let (Some(disk), Some(r_in)) = (&scene.disk, r_in) else {
             return DiskShader::None;
         };
@@ -91,6 +92,7 @@ impl DiskShader {
                 t_in,
                 doppler_beaming,
                 redshift_color,
+                ..
             } => {
                 let t_peak =
                     shakura_sunyaev_temperature(t_in, r_in, shakura_sunyaev_peak_radius(r_in));
@@ -102,6 +104,13 @@ impl DiskShader {
                     y_ref: planck_xyz(t_peak)[1],
                 }
             }
+        }
+    }
+
+    pub(crate) fn emit(&self, radius: f64, g: Option<f64>) -> [f32; 3] {
+        match g {
+            Some(g) => self.shade(radius, g),
+            None => [0.0; 3],
         }
     }
 
@@ -150,8 +159,8 @@ impl DiskShader {
     }
 }
 
-fn shade_ray(info: &RayInfo, scene: &Scene, disk_shader: &DiskShader) -> [f32; 3] {
-    match info.outcome {
+fn shade_ray(info: &RayInfo, scene: &Scene) -> [f32; 3] {
+    let i_bg = match info.outcome {
         RayOutcome::Escaped { side, dir, g } => {
             let sample = scene.sky_for(side).sample(dir);
             match g {
@@ -162,9 +171,14 @@ fn shade_ray(info: &RayInfo, scene: &Scene, disk_shader: &DiskShader) -> [f32; 3
                 None => sample,
             }
         }
-        RayOutcome::DiskHit { radius, g: Some(g) } => disk_shader.shade(radius, g),
         _ => [0.0; 3],
-    }
+    };
+    let t = info.disk_transmission;
+    [
+        info.disk_radiance[0] + t * i_bg[0],
+        info.disk_radiance[1] + t * i_bg[1],
+        info.disk_radiance[2] + t * i_bg[2],
+    ]
 }
 
 pub fn tone_map(image: &ImageF32, exposure: f32) -> Vec<[u8; 3]> {

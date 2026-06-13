@@ -15,6 +15,9 @@ pub enum DiskModel {
         t_in: f64,
         doppler_beaming: bool,
         redshift_color: bool,
+        optical_depth: f64,
+        aspect_ratio: f64,
+        edge_taper: f64,
     },
 }
 
@@ -38,9 +41,84 @@ impl Disk {
                 t_in,
                 doppler_beaming: true,
                 redshift_color: true,
+                optical_depth: f64::INFINITY,
+                aspect_ratio: 0.0,
+                edge_taper: 0.0,
             },
         }
     }
+
+    pub fn volume(&self, r_in: f64) -> DiskVolume {
+        let (tau0, aspect_ratio, edge_taper) = match self.model {
+            DiskModel::Stylized { .. } => (f64::INFINITY, 0.0, 0.0),
+            DiskModel::Blackbody {
+                optical_depth,
+                aspect_ratio,
+                edge_taper,
+                ..
+            } => (optical_depth, aspect_ratio, edge_taper),
+        };
+        let width = edge_taper * (self.r_out - r_in);
+        DiskVolume {
+            r_in,
+            r_out: self.r_out,
+            tau0,
+            aspect_ratio,
+            w_out: width,
+            w_in: width,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct DiskVolume {
+    pub r_in: f64,
+    pub r_out: f64,
+    pub tau0: f64,
+    pub aspect_ratio: f64,
+    pub w_out: f64,
+    pub w_in: f64,
+}
+
+impl DiskVolume {
+    pub fn scale_height(&self, r: f64) -> f64 {
+        self.aspect_ratio * r
+    }
+
+    pub fn taper(&self, r: f64) -> f64 {
+        ramp(self.r_out - r, self.w_out) * ramp(r - self.r_in, self.w_in)
+    }
+
+    pub fn tau_perp(&self, r: f64) -> f64 {
+        let taper = self.taper(r);
+        if taper == 0.0 {
+            0.0
+        } else {
+            self.tau0 * taper
+        }
+    }
+
+    pub fn density_alpha(&self, r: f64, z: f64) -> f64 {
+        let h = self.scale_height(r);
+        let tau_perp = self.tau_perp(r);
+        if h <= 0.0 || tau_perp == 0.0 {
+            return 0.0;
+        }
+        let norm = 1.0 / ((2.0 * std::f64::consts::PI).sqrt() * h);
+        tau_perp * norm * (-0.5 * (z / h) * (z / h)).exp()
+    }
+
+    pub fn tau_eff(&self, r: f64, mu: f64) -> f64 {
+        self.tau_perp(r) / mu.abs()
+    }
+}
+
+fn ramp(edge_distance: f64, width: f64) -> f64 {
+    if width <= 0.0 {
+        return if edge_distance > 0.0 { 1.0 } else { 0.0 };
+    }
+    let t = (edge_distance / width).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 pub fn shakura_sunyaev_temperature(t_in: f64, r_in: f64, r: f64) -> f64 {
