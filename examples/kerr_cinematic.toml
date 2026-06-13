@@ -10,7 +10,9 @@ up = [0.0, 0.0, 1.0]
 fov_deg = 32.0
 width = 960
 height = 540
-supersample = 2
+supersample = 1
+supersample_max = 4
+jitter = true
 
 [disk]
 r_out = 20.0

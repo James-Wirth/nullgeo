@@ -20,6 +20,8 @@ fn camera(
             res,
             energy: 1.0,
             supersample: 1,
+            supersample_max: 1,
+            jitter: false,
         },
         CameraPose {
             position: Vec4::new(0.0, position[0], position[1], position[2]),

@@ -63,6 +63,9 @@ pub struct CameraSection {
     pub height: usize,
     #[serde(default = "one_usize")]
     pub supersample: usize,
+    pub supersample_max: Option<usize>,
+    #[serde(default)]
+    pub jitter: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,6 +273,8 @@ pub fn build_camera(c: &CameraSection) -> Result<Camera, String> {
             res: (c.width, c.height),
             energy: 1.0,
             supersample: c.supersample,
+            supersample_max: c.supersample_max.unwrap_or(c.supersample),
+            jitter: c.jitter,
         },
         CameraPose {
             position: Vec4::new(0.0, c.position[0], c.position[1], c.position[2]),
@@ -427,6 +432,8 @@ mod tests {
             width = 64
             height = 48
             supersample = 2
+            supersample_max = 4
+            jitter = true
 
             [disk]
             r_in = 7.0
@@ -468,6 +475,11 @@ mod tests {
         assert_eq!(file.camera.fov_deg, 25.0);
         assert_eq!(file.camera.width, 64);
         assert_eq!(file.camera.supersample, 2);
+        assert_eq!(file.camera.supersample_max, Some(4));
+        assert!(file.camera.jitter);
+        let camera = build_camera(&file.camera).unwrap();
+        assert_eq!(camera.spec.supersample_max, 4);
+        assert!(camera.spec.jitter);
         let disk = file.disk.unwrap();
         assert_eq!(disk.r_in, 7.0);
         assert_eq!(disk.model, DiskModelKind::Stylized);
@@ -527,6 +539,9 @@ mod tests {
         assert_eq!(file.camera.up, [0.0, 0.0, 1.0]);
         assert_eq!(file.camera.velocity, [0.0; 3]);
         assert_eq!(file.camera.supersample, 1);
+        assert_eq!(file.camera.supersample_max, None);
+        assert!(!file.camera.jitter);
+        assert_eq!(build_camera(&file.camera).unwrap().spec.supersample_max, 1);
         assert_eq!(file.integrator.tol, 1e-9);
         assert_eq!(file.integrator.max_steps, 100_000);
         assert_eq!(file.outputs[0].kind, OutputKind::Beauty);

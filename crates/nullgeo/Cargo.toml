@@ -23,3 +23,7 @@ nalgebra.workspace = true
 thiserror.workspace = true
 rayon = { workspace = true, optional = true }
 
+[[bench]]
+name = "render"
+harness = false
+

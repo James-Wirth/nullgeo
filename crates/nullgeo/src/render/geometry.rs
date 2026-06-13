@@ -63,6 +63,7 @@ pub struct GeometryBuffer {
     pub samples: usize,
     pub annulus: Option<EquatorialAnnulus>,
     pub rays: Vec<RayInfo>,
+    pub refined: Vec<Vec<RayInfo>>,
 }
 
 impl GeometryBuffer {
@@ -72,6 +73,32 @@ impl GeometryBuffer {
 
     pub fn primary(&self, pixel: usize) -> &RayInfo {
         self.ray(0, pixel)
+    }
+
+    pub fn pixel_count(&self) -> usize {
+        self.width * self.height
+    }
+
+    pub fn for_each_sample<F: FnMut(&RayInfo)>(&self, pixel: usize, mut f: F) {
+        let refined = &self.refined[pixel];
+        if refined.is_empty() {
+            for sample in 0..self.samples {
+                f(self.ray(sample, pixel));
+            }
+        } else {
+            for info in refined {
+                f(info);
+            }
+        }
+    }
+
+    pub fn sample_count(&self, pixel: usize) -> usize {
+        let refined = self.refined[pixel].len();
+        if refined == 0 {
+            self.samples
+        } else {
+            refined
+        }
     }
 }
 
@@ -135,20 +162,51 @@ pub fn trace_geometry<S: Spacetime + Sync + ?Sized>(
     };
 
     let (width, height) = camera.spec.res;
-    let offsets = camera.subpixel_offsets();
-    let samples = offsets.len();
-    let mut rays_info = Vec::with_capacity(width * height * samples);
+    let pixels = width * height;
+    let generator = camera.ray_generator(spacetime)?;
 
-    for offset in offsets {
-        let rays = camera.pixel_rays_at(spacetime, offset)?;
-
+    let base_offsets = camera.subpixel_offsets_for(camera.spec.supersample);
+    let samples = base_offsets.len();
+    let mut rays = Vec::with_capacity(pixels * samples);
+    for offset in &base_offsets {
+        let trace_pixel = |pixel: usize| probe(&generator(pixel, *offset));
         #[cfg(feature = "parallel")]
         {
             use rayon::prelude::*;
-            rays_info.par_extend(rays.par_iter().map(probe));
+            rays.par_extend((0..pixels).into_par_iter().map(trace_pixel));
         }
         #[cfg(not(feature = "parallel"))]
-        rays_info.extend(rays.iter().map(probe));
+        rays.extend((0..pixels).map(trace_pixel));
+    }
+
+    let mut refined = vec![Vec::new(); pixels];
+    if camera.spec.supersample_max > camera.spec.supersample {
+        let pixel_angle = camera.spec.fov_deg.to_radians() / width.max(1) as f64;
+        let mask = refinement_mask(
+            &rays[..pixels],
+            width,
+            height,
+            REFINE_CURVATURE * pixel_angle,
+        );
+        let flagged: Vec<usize> = (0..pixels).filter(|&p| mask[p]).collect();
+        let refine_offsets = camera.subpixel_offsets_for(camera.spec.supersample_max);
+        let refine_pixel = |&pixel: &usize| -> (usize, Vec<RayInfo>) {
+            let samples = refine_offsets
+                .iter()
+                .map(|offset| probe(&generator(pixel, *offset)))
+                .collect();
+            (pixel, samples)
+        };
+        #[cfg(feature = "parallel")]
+        let traced: Vec<(usize, Vec<RayInfo>)> = {
+            use rayon::prelude::*;
+            flagged.par_iter().map(refine_pixel).collect()
+        };
+        #[cfg(not(feature = "parallel"))]
+        let traced: Vec<(usize, Vec<RayInfo>)> = flagged.iter().map(refine_pixel).collect();
+        for (pixel, samples) in traced {
+            refined[pixel] = samples;
+        }
     }
 
     Ok(GeometryBuffer {
@@ -156,6 +214,76 @@ pub fn trace_geometry<S: Spacetime + Sync + ?Sized>(
         height,
         samples,
         annulus: cfg.disk,
-        rays: rays_info,
+        rays,
+        refined,
     })
+}
+
+const REFINE_CURVATURE: f64 = 1.0;
+
+const NEIGHBORS: [(isize, isize); 8] = [
+    (-1, -1),
+    (0, -1),
+    (1, -1),
+    (-1, 0),
+    (1, 0),
+    (-1, 1),
+    (0, 1),
+    (1, 1),
+];
+
+const AXES: [[(isize, isize); 2]; 2] = [[(-1, 0), (1, 0)], [(0, -1), (0, 1)]];
+
+fn refinement_mask(
+    primary: &[RayInfo],
+    width: usize,
+    height: usize,
+    curvature_threshold: f64,
+) -> Vec<bool> {
+    let at = |i: isize, j: isize| -> Option<&RayInfo> {
+        (i >= 0 && j >= 0 && i < width as isize && j < height as isize)
+            .then(|| &primary[j as usize * width + i as usize])
+    };
+    (0..width * height)
+        .map(|pixel| {
+            let (i, j) = ((pixel % width) as isize, (pixel / width) as isize);
+            let here = &primary[pixel];
+
+            let on_boundary = NEIGHBORS
+                .iter()
+                .any(|&(di, dj)| at(i + di, j + dj).is_some_and(|n| n.class() != here.class()));
+            if on_boundary {
+                return true;
+            }
+
+            let RayOutcome::Escaped { dir: center, .. } = here.outcome else {
+                return false;
+            };
+            let curvature: f64 = AXES
+                .iter()
+                .filter_map(|[(adi, adj), (bdi, bdj)]| {
+                    let a = escaped_dir(at(i + adi, j + adj)?)?;
+                    let b = escaped_dir(at(i + bdi, j + bdj)?)?;
+                    Some(second_difference(a, center, b))
+                })
+                .sum();
+            curvature > curvature_threshold
+        })
+        .collect()
+}
+
+fn escaped_dir(info: &RayInfo) -> Option<[f64; 3]> {
+    match info.outcome {
+        RayOutcome::Escaped { dir, .. } => Some(dir),
+        _ => None,
+    }
+}
+
+fn second_difference(a: [f64; 3], center: [f64; 3], b: [f64; 3]) -> f64 {
+    let d = [
+        a[0] + b[0] - 2.0 * center[0],
+        a[1] + b[1] - 2.0 * center[1],
+        a[2] + b[2] - 2.0 * center[2],
+    ];
+    (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
 }

@@ -101,6 +101,8 @@ fn shadow_setup() -> (Schwarzschild, Camera, Scene, TraceConfig) {
             res: (24, 24),
             energy: 1.0,
             supersample: 1,
+            supersample_max: 1,
+            jitter: false,
         },
         CameraPose {
             position: Vec4::new(0.0, -15.0, 0.0, 0.0),
@@ -173,6 +175,8 @@ fn redshift_map_matches_face_on_formula() {
             res: (3, 3),
             energy: 1.0,
             supersample: 1,
+            supersample_max: 1,
+            jitter: false,
         },
         CameraPose {
             position: Vec4::new(0.0, 0.0, 0.0, z_cam),

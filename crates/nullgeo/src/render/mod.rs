@@ -36,21 +36,18 @@ pub fn render<S: Spacetime + Sync + ?Sized>(
 }
 
 pub fn shade_beauty(buffer: &GeometryBuffer, scene: &Scene) -> ImageF32 {
-    let pixels = buffer.width * buffer.height;
-    let weight = 1.0 / buffer.samples as f32;
+    let pixels = buffer.pixel_count();
     let disk_shader = DiskShader::new(scene, buffer.annulus.map(|annulus| annulus.r_in));
 
     let mut data = vec![[0.0f32; 3]; pixels];
-    for sample in 0..buffer.samples {
-        for (pixel, info) in data
-            .iter_mut()
-            .zip(&buffer.rays[sample * pixels..(sample + 1) * pixels])
-        {
+    for (pixel, out) in data.iter_mut().enumerate() {
+        let weight = 1.0 / buffer.sample_count(pixel) as f32;
+        buffer.for_each_sample(pixel, |info| {
             let color = shade_ray(info, scene, &disk_shader);
             for c in 0..3 {
-                pixel[c] += weight * color[c];
+                out[c] += weight * color[c];
             }
-        }
+        });
     }
 
     ImageF32 {

@@ -3,8 +3,9 @@ use nullgeo::geometry::{Metric, PhasePoint, Vec4};
 use nullgeo::integrator::Tolerances;
 use nullgeo::spacetimes::{Kerr, Minkowski, Schwarzschild};
 use nullgeo::{
-    render, tone_map, trace, Camera, CameraPose, CameraSpec, Chart, Disk, EquatorialAnnulus,
-    EquirectImage, ImageF32, Scene, SkyMap, SkySide, Spacetime, Termination, TraceConfig,
+    render, shade_beauty, tone_map, trace, trace_geometry, Camera, CameraPose, CameraSpec, Chart,
+    Disk, EquatorialAnnulus, EquirectImage, GeometryBuffer, ImageF32, RayClass, Scene, SkyMap,
+    SkySide, Spacetime, Termination, TraceConfig,
 };
 
 fn backward_ray<M: Metric>(m: &M, x: Vec4, dir: [f64; 3], energy: f64) -> PhasePoint {
@@ -36,6 +37,8 @@ fn minkowski_render_matches_direct_sky_lookup() {
             res: (8, 6),
             energy: 1.0,
             supersample: 1,
+            supersample_max: 1,
+            jitter: false,
         },
         CameraPose {
             position: Vec4::new(0.0, position[0], position[1], position[2]),
@@ -88,6 +91,8 @@ fn supersampled_render_averages_subpixel_sky_samples() {
                 res: (8, 6),
                 energy: 1.0,
                 supersample,
+                supersample_max: supersample,
+                jitter: false,
             },
             CameraPose {
                 position: Vec4::new(0.0, position[0], position[1], position[2]),
@@ -238,6 +243,8 @@ fn edge_on_disk_image(spin: f64) -> ImageF32 {
             res: (24, 24),
             energy: 1.0,
             supersample: 1,
+            supersample_max: 1,
+            jitter: false,
         },
         CameraPose {
             position: Vec4::new(0.0, -100.0, 0.0, 10.0),
@@ -367,6 +374,119 @@ fn graticule_rejects_seams_and_degenerate_widths() {
     assert!(SkyMap::graticule(10.0, 10.0, None).is_err());
     assert!(SkyMap::graticule(10.0, 0.5, None).is_ok());
     assert!(SkyMap::graticule(180.0, 1.0, None).is_ok());
+}
+
+fn shadow_camera(supersample: usize, supersample_max: usize) -> Camera {
+    Camera::new(
+        CameraSpec {
+            fov_deg: 70.0,
+            res: (16, 16),
+            energy: 1.0,
+            supersample,
+            supersample_max,
+            jitter: false,
+        },
+        CameraPose {
+            position: Vec4::new(0.0, -30.0, 0.0, 0.0),
+            look_at: [0.0, 0.0, 0.0],
+            up: [0.0, 0.0, 1.0],
+            velocity: [0.0; 3],
+        },
+    )
+    .unwrap()
+}
+
+fn shadow_scene() -> Scene {
+    Scene {
+        sky: SkyMap::Uniform([1.0; 3]),
+        sky_secondary: None,
+        disk: None,
+    }
+}
+
+fn shadow_config() -> TraceConfig {
+    TraceConfig {
+        escape_radius: 60.0,
+        max_steps: 3_000,
+        ..TraceConfig::default()
+    }
+}
+
+fn shadow_buffer(supersample: usize, supersample_max: usize) -> GeometryBuffer {
+    trace_geometry(
+        &Schwarzschild::new(1.0).unwrap(),
+        &shadow_camera(supersample, supersample_max),
+        &shadow_scene(),
+        &shadow_config(),
+    )
+    .unwrap()
+}
+
+#[test]
+fn adaptive_supersampling_targets_edges_and_leaves_flat_sky_alone() {
+    let baseline = shadow_buffer(1, 1);
+    assert!(
+        baseline.refined.iter().all(|r| r.is_empty()),
+        "supersample_max == supersample must not refine anything"
+    );
+
+    let adaptive = shadow_buffer(1, 3);
+    let refined: Vec<usize> = (0..adaptive.pixel_count())
+        .filter(|&p| !adaptive.refined[p].is_empty())
+        .collect();
+    assert!(!refined.is_empty(), "the shadow edge should refine pixels");
+    assert!(
+        refined.len() < adaptive.pixel_count() / 2,
+        "flat sky and the dark interior should stay cheap: {} of {} refined",
+        refined.len(),
+        adaptive.pixel_count()
+    );
+    for &p in &refined {
+        assert_eq!(
+            adaptive.refined[p].len(),
+            9,
+            "refined pixels carry 3x3 samples"
+        );
+    }
+    assert!(
+        adaptive.refined[0].is_empty(),
+        "a far-corner sky pixel needs no refinement"
+    );
+    assert_eq!(adaptive.primary(0).class(), RayClass::EscapedPrimary);
+
+    let on_edge = refined.iter().any(|&p| {
+        let here = adaptive.primary(p).class();
+        [
+            -1isize,
+            1,
+            -(adaptive.width as isize),
+            adaptive.width as isize,
+        ]
+        .iter()
+        .filter_map(|&d| usize::try_from(p as isize + d).ok())
+        .filter(|&n| n < adaptive.pixel_count())
+        .any(|n| adaptive.primary(n).class() != here)
+    });
+    assert!(
+        on_edge,
+        "refinement should track the capture/escape boundary"
+    );
+
+    let scene = shadow_scene();
+    let base_img = shade_beauty(&baseline, &scene);
+    let adapt_img = shade_beauty(&adaptive, &scene);
+    let mut changed = false;
+    for p in 0..adaptive.pixel_count() {
+        if adaptive.refined[p].is_empty() {
+            assert_eq!(
+                base_img.data[p], adapt_img.data[p],
+                "unrefined pixel {p} must match the 1-spp shading"
+            );
+        } else if base_img.data[p] != adapt_img.data[p] {
+            changed = true;
+        }
+    }
+    assert!(changed, "refinement should resolve at least one edge pixel");
 }
 
 #[test]

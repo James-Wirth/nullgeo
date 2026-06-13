@@ -146,6 +146,8 @@ fn run_propagate(args: &PropagateArgs) -> Result<(), String> {
             res: (1, 1),
             energy: args.energy,
             supersample: 1,
+            supersample_max: 1,
+            jitter: false,
         },
         CameraPose {
             position: x,
@@ -370,6 +372,8 @@ fn run_shadow(args: &ShadowArgs) -> Result<(), String> {
             res: (args.width, args.height),
             energy: args.energy,
             supersample: 1,
+            supersample_max: 1,
+            jitter: false,
         },
         CameraPose {
             position: Vec4::new(0.0, args.cam_x, 0.0, 0.0),

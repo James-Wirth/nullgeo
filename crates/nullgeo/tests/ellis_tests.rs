@@ -262,6 +262,8 @@ fn camera_rays_are_null_and_see_both_sides() {
             res: (3, 3),
             energy: 1.0,
             supersample: 1,
+            supersample_max: 1,
+            jitter: false,
         },
         CameraPose {
             position: Vec4::new(0.0, 20.0, FRAC_PI_2, 0.0),

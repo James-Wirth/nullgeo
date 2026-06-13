@@ -8,6 +8,8 @@ pub struct CameraSpec {
     pub res: (usize, usize),
     pub energy: f64,
     pub supersample: usize,
+    pub supersample_max: usize,
+    pub jitter: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -59,6 +61,11 @@ impl Camera {
         if spec.supersample == 0 {
             return Err(Error::InvalidArg("supersample must be at least 1".into()));
         }
+        if spec.supersample_max < spec.supersample {
+            return Err(Error::InvalidArg(
+                "supersample_max must be at least supersample".into(),
+            ));
+        }
         if pose.velocity.iter().any(|c| !c.is_finite()) {
             return Err(Error::InvalidArg("velocity must be finite".into()));
         }
@@ -76,33 +83,46 @@ impl Camera {
         Ok([forward, right, up])
     }
 
+    fn scales(&self) -> (f64, f64) {
+        let (w, h) = self.spec.res;
+        let aspect = w as f64 / h as f64;
+        let scale_u = (0.5 * self.spec.fov_deg.to_radians()).tan();
+        (scale_u, scale_u / aspect)
+    }
+
     pub fn pixel_directions(&self) -> Vec<[f64; 3]> {
         self.pixel_directions_at((0.5, 0.5))
     }
 
     pub fn pixel_directions_at(&self, subpixel: (f64, f64)) -> Vec<[f64; 3]> {
         let (w, h) = self.spec.res;
-        let aspect = w as f64 / h as f64;
-        let scale_u = (0.5 * self.spec.fov_deg.to_radians()).tan();
-        let scale_v = scale_u / aspect;
-
-        let mut dirs = Vec::with_capacity(w * h);
-        for j in 0..h {
-            let v = (1.0 - 2.0 * ((j as f64 + subpixel.1) / h as f64)) * scale_v;
-            for i in 0..w {
-                let u = (2.0 * ((i as f64 + subpixel.0) / w as f64) - 1.0) * scale_u;
-                let inv_norm = 1.0 / (1.0 + u * u + v * v).sqrt();
-                dirs.push([inv_norm, u * inv_norm, v * inv_norm]);
-            }
-        }
-        dirs
+        let (scale_u, scale_v) = self.scales();
+        (0..w * h)
+            .map(|p| pixel_direction(scale_u, scale_v, w, h, p % w, p / w, subpixel))
+            .collect()
     }
 
     pub fn subpixel_offsets(&self) -> Vec<(f64, f64)> {
-        let n = self.spec.supersample;
-        let centered = |k: usize| (k as f64 + 0.5) / n as f64;
+        self.subpixel_offsets_for(self.spec.supersample)
+    }
+
+    pub fn subpixel_offsets_for(&self, n: usize) -> Vec<(f64, f64)> {
         (0..n * n)
-            .map(|k| (centered(k % n), centered(k / n)))
+            .map(|k| {
+                let (cell_x, cell_y) = (k % n, k / n);
+                let (jx, jy) = if self.spec.jitter {
+                    (
+                        radical_inverse(k + 1, 2) - 0.5,
+                        radical_inverse(k + 1, 3) - 0.5,
+                    )
+                } else {
+                    (0.0, 0.0)
+                };
+                (
+                    (cell_x as f64 + 0.5 + jx) / n as f64,
+                    (cell_y as f64 + 0.5 + jy) / n as f64,
+                )
+            })
             .collect()
     }
 
@@ -125,6 +145,15 @@ impl Camera {
         s: &S,
         subpixel: (f64, f64),
     ) -> Result<Vec<PhasePoint>> {
+        let (w, h) = self.spec.res;
+        let generator = self.ray_generator(s)?;
+        Ok((0..w * h).map(|p| generator(p, subpixel)).collect())
+    }
+
+    pub fn ray_generator<S: Spacetime + ?Sized>(
+        &self,
+        s: &S,
+    ) -> Result<impl Fn(usize, (f64, f64)) -> PhasePoint> {
         let [forward, right, up] = self.view_basis(s.embed(&self.pose.position))?;
         let observer = self.observer_four_velocity(s)?;
         let seed = |d: [f64; 3]| s.lift_direction(&self.pose.position, d);
@@ -135,18 +164,43 @@ impl Camera {
             [seed(forward), seed(right), seed(up)],
         )?;
 
+        let position = self.pose.position;
         let energy = self.spec.energy;
-        let rays = self
-            .pixel_directions_at(subpixel)
-            .into_iter()
-            .map(|[f, r, u]| {
-                let arriving = make_null_covector(&coframe, [-f, -r, -u], energy);
-                PhasePoint {
-                    x: self.pose.position,
-                    p: -arriving,
-                }
-            })
-            .collect();
-        Ok(rays)
+        let (w, h) = self.spec.res;
+        let (scale_u, scale_v) = self.scales();
+        Ok(move |pixel: usize, subpixel: (f64, f64)| {
+            let [f, r, u] = pixel_direction(scale_u, scale_v, w, h, pixel % w, pixel / w, subpixel);
+            let arriving = make_null_covector(&coframe, [-f, -r, -u], energy);
+            PhasePoint {
+                x: position,
+                p: -arriving,
+            }
+        })
     }
+}
+
+fn pixel_direction(
+    scale_u: f64,
+    scale_v: f64,
+    w: usize,
+    h: usize,
+    i: usize,
+    j: usize,
+    subpixel: (f64, f64),
+) -> [f64; 3] {
+    let u = (2.0 * ((i as f64 + subpixel.0) / w as f64) - 1.0) * scale_u;
+    let v = (1.0 - 2.0 * ((j as f64 + subpixel.1) / h as f64)) * scale_v;
+    let inv_norm = 1.0 / (1.0 + u * u + v * v).sqrt();
+    [inv_norm, u * inv_norm, v * inv_norm]
+}
+
+fn radical_inverse(mut index: usize, base: usize) -> f64 {
+    let mut result = 0.0;
+    let mut denom = 1.0;
+    while index > 0 {
+        denom *= base as f64;
+        result += (index % base) as f64 / denom;
+        index /= base;
+    }
+    result
 }
