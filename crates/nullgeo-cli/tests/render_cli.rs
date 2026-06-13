@@ -82,6 +82,11 @@ kind = "min-radius"
 [[output]]
 path = "{dir}/order.ppm"
 kind = "image-order"
+
+[[output]]
+path = "{dir}/beauty16.png"
+tone = "aces"
+bit_depth = 16
 "#,
         dir = dir.display()
     );
@@ -108,6 +113,10 @@ kind = "image-order"
 
     let ppm = std::fs::read(dir.join("order.ppm")).unwrap();
     assert!(ppm.starts_with(b"P6\n10 6\n255\n"));
+
+    let deep = image::open(dir.join("beauty16.png")).unwrap();
+    assert_eq!((deep.width(), deep.height()), (10, 6));
+    assert_eq!(deep.color(), image::ColorType::Rgb16);
     std::fs::remove_dir_all(&dir).ok();
 }
 

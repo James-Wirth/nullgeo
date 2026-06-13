@@ -18,8 +18,15 @@ pub enum RayClass {
 #[derive(Debug, Clone, Copy)]
 pub enum RayOutcome {
     Captured,
-    Escaped { side: SkySide, dir: [f64; 3] },
-    DiskHit { radius: f64, g: Option<f64> },
+    Escaped {
+        side: SkySide,
+        dir: [f64; 3],
+        g: Option<f64>,
+    },
+    DiskHit {
+        radius: f64,
+        g: Option<f64>,
+    },
     MaxSteps,
     Stalled,
 }
@@ -86,6 +93,13 @@ pub fn trace_geometry<S: Spacetime + Sync + ?Sized>(
                 disk.r_out, r_in
             )));
         }
+        if let crate::render::DiskModel::Blackbody { t_in, .. } = disk.model {
+            if !(t_in > 0.0 && t_in.is_finite()) {
+                return Err(Error::InvalidArg(format!(
+                    "blackbody disk needs a positive finite t_in, got {t_in}"
+                )));
+            }
+        }
         cfg.disk = Some(EquatorialAnnulus {
             r_in,
             r_out: disk.r_out,
@@ -98,7 +112,12 @@ pub fn trace_geometry<S: Spacetime + Sync + ?Sized>(
         let (termination, stats) = trace_with_stats(spacetime, *ray, &cfg);
         let outcome = match termination {
             Termination::Captured { .. } => RayOutcome::Captured,
-            Termination::Escaped { side, dir, .. } => RayOutcome::Escaped { side, dir },
+            Termination::Escaped { side, dir, state } => {
+                let killing_energy = state.p[0];
+                let g = (killing_energy > 0.0 && killing_energy.is_finite())
+                    .then(|| ray.p.dot(&u_obs) / killing_energy);
+                RayOutcome::Escaped { side, dir, g }
+            }
             Termination::HitSurface { state } => {
                 let g = spacetime
                     .circular_orbits()

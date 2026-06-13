@@ -14,6 +14,7 @@ supersample = 3
 
 [disk]
 r_out = 18.0
+model = "stylized"
 
 [sky]
 checker_deg = 15.0

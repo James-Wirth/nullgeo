@@ -7,8 +7,8 @@ use clap::{Args, Parser, Subcommand};
 use nullgeo::geometry::Vec4;
 use nullgeo::integrator::{hamiltonian, rk45_step, Tolerances};
 use nullgeo::{
-    colorize, render, shade_beauty, shade_map, tone_map, trace_geometry, Camera, CameraPose,
-    CameraSpec, Colormap, Scene, SkyMap, TraceConfig,
+    colorize, quantize16, quantize8, render, shade_beauty, shade_map, tone_map_curve,
+    trace_geometry, Camera, CameraPose, CameraSpec, Colormap, Scene, SkyMap, TraceConfig,
 };
 use scene_file::{
     build_camera, build_disk, build_sky, build_spacetime, build_trace_config, MetricKind,
@@ -235,7 +235,7 @@ fn run_render(path: &str) -> Result<(), String> {
             .as_ref()
             .map(|s| build_sky(s, base))
             .transpose()?,
-        disk: file.disk.as_ref().map(build_disk),
+        disk: file.disk.as_ref().map(build_disk).transpose()?,
     };
     let cfg = build_trace_config(&file.integrator, file.camera.position);
 
@@ -263,17 +263,46 @@ fn write_output(
     let result = match output.kind.map_quantity() {
         None => {
             let img = shade_beauty(buffer, scene);
+            let curve = output.tone.map(|t| t.to_curve()).unwrap_or_default();
             match format {
                 OutputFormat::Png | OutputFormat::Ppm => {
-                    let pixels = tone_map(&img, output.exposure);
-                    write_rgb(&pixels, img.width, img.height, format, path_str)
+                    let display = tone_map_curve(&img, output.exposure, curve);
+                    match (format, output.bit_depth.unwrap_or(8)) {
+                        (_, 8) => write_rgb(
+                            &quantize8(&display),
+                            img.width,
+                            img.height,
+                            format,
+                            path_str,
+                        ),
+                        (OutputFormat::Png, 16) => {
+                            write_png16(&quantize16(&display), img.width, img.height, path_str)
+                        }
+                        (_, 16) => Err("bit_depth = 16 needs png output".into()),
+                        (_, other) => Err(format!("bit_depth must be 8 or 16, got {other}")),
+                    }
                 }
-                OutputFormat::Pfm => io::write_pfm_rgb(path_str, img.width, img.height, &img.data)
-                    .map_err(|e| e.to_string()),
+                OutputFormat::Pfm => {
+                    if output.tone.is_some() || output.bit_depth.is_some() {
+                        return Err(format!(
+                            "{}: pfm export is raw linear radiance; tone and bit_depth do not \
+                             apply",
+                            out.display()
+                        ));
+                    }
+                    io::write_pfm_rgb(path_str, img.width, img.height, &img.data)
+                        .map_err(|e| e.to_string())
+                }
                 OutputFormat::Csv => Err("a beauty render cannot be exported as csv".into()),
             }
         }
         Some(quantity) => {
+            if output.tone.is_some() || output.bit_depth.is_some() {
+                return Err(format!(
+                    "{}: tone and bit_depth apply to beauty outputs only",
+                    out.display()
+                ));
+            }
             let field = shade_map(buffer, quantity);
             match format {
                 OutputFormat::Png | OutputFormat::Ppm => {
@@ -322,6 +351,16 @@ fn write_rgb(
         }
         _ => unreachable!(),
     }
+}
+
+fn write_png16(pixels: &[[u16; 3]], width: usize, height: usize, path: &str) -> Result<(), String> {
+    let raw: Vec<u16> = pixels.iter().flatten().copied().collect();
+    let buffer =
+        image::ImageBuffer::<image::Rgb<u16>, _>::from_raw(width as u32, height as u32, raw)
+            .ok_or("pixel buffer size mismatch")?;
+    buffer
+        .save_with_format(path, image::ImageFormat::Png)
+        .map_err(|e| e.to_string())
 }
 
 fn run_shadow(args: &ShadowArgs) -> Result<(), String> {

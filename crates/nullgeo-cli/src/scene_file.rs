@@ -4,8 +4,8 @@ use nullgeo::geometry::Vec4;
 use nullgeo::integrator::Tolerances;
 use nullgeo::spacetimes::{Ellis, Kerr, Minkowski, ReissnerNordstrom, Schwarzschild};
 use nullgeo::{
-    Camera, CameraPose, CameraSpec, Colormap, Disk, EquirectImage, MapQuantity, SkyMap, Spacetime,
-    TraceConfig,
+    Camera, CameraPose, CameraSpec, Colormap, Disk, DiskModel, EquirectImage, MapQuantity, SkyMap,
+    Spacetime, ToneCurve, TraceConfig,
 };
 use serde::Deserialize;
 
@@ -71,10 +71,21 @@ pub struct DiskSection {
     #[serde(default)]
     pub r_in: f64,
     pub r_out: f64,
-    #[serde(default = "default_emissivity")]
-    pub emissivity_index: f64,
-    #[serde(default = "default_g_power")]
-    pub g_power: f64,
+    #[serde(default)]
+    pub model: DiskModelKind,
+    pub t_in: Option<f64>,
+    pub doppler_beaming: Option<bool>,
+    pub redshift_color: Option<bool>,
+    pub emissivity_index: Option<f64>,
+    pub g_power: Option<f64>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DiskModelKind {
+    #[default]
+    Blackbody,
+    Stylized,
 }
 
 #[derive(Debug, Deserialize)]
@@ -117,6 +128,24 @@ pub struct OutputSection {
     pub colormap: Option<ColormapChoice>,
     #[serde(default = "default_exposure")]
     pub exposure: f32,
+    pub tone: Option<ToneChoice>,
+    pub bit_depth: Option<u32>,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ToneChoice {
+    Reinhard,
+    Aces,
+}
+
+impl ToneChoice {
+    pub fn to_curve(self) -> ToneCurve {
+        match self {
+            ToneChoice::Reinhard => ToneCurve::Reinhard,
+            ToneChoice::Aces => ToneCurve::Aces,
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Deserialize)]
@@ -203,14 +232,6 @@ fn default_up() -> [f64; 3] {
 
 fn default_fov() -> f64 {
     60.0
-}
-
-fn default_emissivity() -> f64 {
-    2.0
-}
-
-fn default_g_power() -> f64 {
-    3.0
 }
 
 fn default_tol() -> f64 {
@@ -307,13 +328,39 @@ pub fn build_sky(s: &SkySection, base: &Path) -> Result<SkyMap, String> {
     }
 }
 
-pub fn build_disk(d: &DiskSection) -> Disk {
-    Disk {
+pub fn build_disk(d: &DiskSection) -> Result<Disk, String> {
+    let model = match d.model {
+        DiskModelKind::Blackbody => {
+            if d.emissivity_index.is_some() || d.g_power.is_some() {
+                return Err(
+                    "emissivity_index and g_power apply to the stylized disk model only".into(),
+                );
+            }
+            DiskModel::Blackbody {
+                t_in: d.t_in.unwrap_or(10_000.0),
+                doppler_beaming: d.doppler_beaming.unwrap_or(true),
+                redshift_color: d.redshift_color.unwrap_or(true),
+            }
+        }
+        DiskModelKind::Stylized => {
+            if d.t_in.is_some() || d.doppler_beaming.is_some() || d.redshift_color.is_some() {
+                return Err(
+                    "t_in, doppler_beaming and redshift_color apply to the blackbody disk model \
+                     only"
+                        .into(),
+                );
+            }
+            DiskModel::Stylized {
+                emissivity_index: d.emissivity_index.unwrap_or(2.0),
+                g_power: d.g_power.unwrap_or(3.0),
+            }
+        }
+    };
+    Ok(Disk {
         r_in: d.r_in,
         r_out: d.r_out,
-        emissivity_index: d.emissivity_index,
-        g_power: d.g_power,
-    }
+        model,
+    })
 }
 
 pub fn build_trace_config(i: &IntegratorSection, camera_position: [f64; 3]) -> TraceConfig {
@@ -345,6 +392,7 @@ mod tests {
             "kerr_disk.toml",
             "ellis_checker.toml",
             "kerr_diagnostics.toml",
+            "kerr_cinematic.toml",
         ] {
             let text = std::fs::read_to_string(examples.join(name)).unwrap();
             let file = parse(&text);
@@ -353,6 +401,9 @@ mod tests {
             build_sky(&file.sky, &examples).unwrap();
             if let Some(sky) = &file.sky_secondary {
                 build_sky(sky, &examples).unwrap();
+            }
+            if let Some(disk) = &file.disk {
+                build_disk(disk).unwrap();
             }
             build_trace_config(&file.integrator, file.camera.position);
             assert!(!file.outputs.is_empty());
@@ -380,6 +431,7 @@ mod tests {
             [disk]
             r_in = 7.0
             r_out = 30.0
+            model = "stylized"
             emissivity_index = 2.5
             g_power = 4.0
 
@@ -418,7 +470,13 @@ mod tests {
         assert_eq!(file.camera.supersample, 2);
         let disk = file.disk.unwrap();
         assert_eq!(disk.r_in, 7.0);
-        assert_eq!(disk.g_power, 4.0);
+        assert_eq!(disk.model, DiskModelKind::Stylized);
+        assert_eq!(disk.g_power, Some(4.0));
+        let built = build_disk(&disk).unwrap();
+        assert!(matches!(
+            built.model,
+            DiskModel::Stylized { g_power, .. } if g_power == 4.0
+        ));
         assert!(matches!(
             file.sky_secondary,
             Some(SkySection {
@@ -477,6 +535,67 @@ mod tests {
         assert_eq!(file.outputs[0].exposure, 1.0);
         let cfg = build_trace_config(&file.integrator, file.camera.position);
         assert_eq!(cfg.escape_radius, 100.0);
+    }
+
+    fn disk_section(r_out: f64) -> DiskSection {
+        DiskSection {
+            r_in: 0.0,
+            r_out,
+            model: DiskModelKind::default(),
+            t_in: None,
+            doppler_beaming: None,
+            redshift_color: None,
+            emissivity_index: None,
+            g_power: None,
+        }
+    }
+
+    #[test]
+    fn disk_model_defaults_to_full_physics_blackbody() {
+        let built = build_disk(&disk_section(18.0)).unwrap();
+        assert!(matches!(
+            built.model,
+            DiskModel::Blackbody {
+                t_in,
+                doppler_beaming: true,
+                redshift_color: true,
+            } if t_in == 10_000.0
+        ));
+
+        let stylized = DiskSection {
+            model: DiskModelKind::Stylized,
+            ..disk_section(18.0)
+        };
+        assert!(matches!(
+            build_disk(&stylized).unwrap().model,
+            DiskModel::Stylized {
+                emissivity_index,
+                g_power,
+            } if emissivity_index == 2.0 && g_power == 3.0
+        ));
+    }
+
+    #[test]
+    fn disk_model_rejects_cross_model_fields() {
+        let blackbody_with_g_power = DiskSection {
+            g_power: Some(3.0),
+            ..disk_section(18.0)
+        };
+        assert!(build_disk(&blackbody_with_g_power).is_err());
+
+        let stylized_with_t_in = DiskSection {
+            model: DiskModelKind::Stylized,
+            t_in: Some(5000.0),
+            ..disk_section(18.0)
+        };
+        assert!(build_disk(&stylized_with_t_in).is_err());
+
+        let stylized_with_toggle = DiskSection {
+            model: DiskModelKind::Stylized,
+            doppler_beaming: Some(false),
+            ..disk_section(18.0)
+        };
+        assert!(build_disk(&stylized_with_toggle).is_err());
     }
 
     fn sky_section() -> SkySection {

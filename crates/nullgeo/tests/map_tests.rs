@@ -139,7 +139,18 @@ fn classification_map_degenerates_to_the_shadow() {
                 captured += 1;
             }
             RayClass::EscapedPrimary => {
-                assert_eq!(color[0], 1.0, "sky pixel {pixel} should be white");
+                let RayOutcome::Escaped { g: Some(g), .. } = buffer.primary(pixel).outcome else {
+                    panic!("escaped pixel {pixel} should carry a sky g-factor");
+                };
+                assert!(
+                    g > 1.0,
+                    "a static camera at r = 15M sees the sky gravitationally blueshifted"
+                );
+                let boosted_white = (g * g * g * g) as f32;
+                assert_eq!(
+                    color[0], boosted_white,
+                    "sky pixel {pixel} should be white times g^4"
+                );
                 assert_eq!(class_value, 1.0);
             }
             other => panic!("unexpected class {other:?} at pixel {pixel}"),
@@ -174,7 +185,7 @@ fn redshift_map_matches_face_on_formula() {
     let scene = Scene {
         sky: SkyMap::Uniform([0.0; 3]),
         sky_secondary: None,
-        disk: Some(Disk::new(40.0)),
+        disk: Some(Disk::stylized(40.0)),
     };
     let cfg = precise_config();
 

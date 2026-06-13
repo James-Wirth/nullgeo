@@ -1,0 +1,38 @@
+[metric]
+kind = "kerr"
+mass = 1.0
+spin = 0.9
+
+[camera]
+position = [-70.0, 0.0, 4.0]
+look_at = [0.0, 0.0, 0.0]
+up = [0.0, 0.0, 1.0]
+fov_deg = 32.0
+width = 960
+height = 540
+supersample = 2
+
+[disk]
+r_out = 20.0
+t_in = 10000.0
+
+[sky]
+uniform = [0.0, 0.0, 0.0]
+
+[integrator]
+tol = 1e-9
+max_steps = 200000
+
+[[output]]
+path = "kerr_cinematic.png"
+tone = "aces"
+exposure = 1.5
+
+[[output]]
+path = "kerr_cinematic_16bit.png"
+tone = "aces"
+exposure = 1.5
+bit_depth = 16
+
+[[output]]
+path = "kerr_cinematic.pfm"

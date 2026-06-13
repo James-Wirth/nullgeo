@@ -250,7 +250,7 @@ fn edge_on_disk_image(spin: f64) -> ImageF32 {
     let scene = Scene {
         sky: SkyMap::Uniform([0.0; 3]),
         sky_secondary: None,
-        disk: Some(Disk::new(12.0)),
+        disk: Some(Disk::stylized(12.0)),
     };
     let cfg = TraceConfig {
         escape_radius: 500.0,
