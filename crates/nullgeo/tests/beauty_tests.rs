@@ -102,6 +102,7 @@ fn suppressing_redshift_color_keeps_the_emitted_chromaticity() {
             redshift_color: false,
             optical_depth: f64::INFINITY,
             aspect_ratio: 0.0,
+            density_index: 3.0,
             edge_taper: 0.0,
         },
     };
@@ -144,6 +145,7 @@ fn edge_on_kerr_asymmetries() -> (f64, f64) {
             redshift_color: true,
             optical_depth: f64::INFINITY,
             aspect_ratio: 0.0,
+            density_index: 3.0,
             edge_taper: 0.0,
         },
     };

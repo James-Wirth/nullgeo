@@ -81,6 +81,7 @@ pub struct DiskSection {
     pub redshift_color: Option<bool>,
     pub optical_depth: Option<f64>,
     pub aspect_ratio: Option<f64>,
+    pub density_index: Option<f64>,
     pub edge_taper: Option<f64>,
     pub emissivity_index: Option<f64>,
     pub g_power: Option<f64>,
@@ -363,7 +364,7 @@ pub fn build_disk(d: &DiskSection) -> Result<Disk, String> {
                     "emissivity_index and g_power apply to the stylized disk model only".into(),
                 );
             }
-            let optical_depth = d.optical_depth.unwrap_or(2.5);
+            let optical_depth = d.optical_depth.unwrap_or(2.0);
             if !(optical_depth > 0.0 && optical_depth.is_finite()) {
                 return Err(format!(
                     "disk optical_depth must be positive and finite, got {optical_depth}"
@@ -373,6 +374,12 @@ pub fn build_disk(d: &DiskSection) -> Result<Disk, String> {
             if !(aspect_ratio >= 0.0 && aspect_ratio.is_finite()) {
                 return Err(format!(
                     "disk aspect_ratio must be non-negative and finite, got {aspect_ratio}"
+                ));
+            }
+            let density_index = d.density_index.unwrap_or(3.0);
+            if !(density_index > 0.0 && density_index.is_finite()) {
+                return Err(format!(
+                    "disk density_index must be positive and finite, got {density_index}"
                 ));
             }
             let edge_taper = d.edge_taper.unwrap_or(0.2);
@@ -387,6 +394,7 @@ pub fn build_disk(d: &DiskSection) -> Result<Disk, String> {
                 redshift_color: d.redshift_color.unwrap_or(true),
                 optical_depth,
                 aspect_ratio,
+                density_index,
                 edge_taper,
             }
         }
@@ -396,11 +404,12 @@ pub fn build_disk(d: &DiskSection) -> Result<Disk, String> {
                 || d.redshift_color.is_some()
                 || d.optical_depth.is_some()
                 || d.aspect_ratio.is_some()
+                || d.density_index.is_some()
                 || d.edge_taper.is_some()
             {
                 return Err(
-                    "t_in, doppler_beaming, redshift_color, optical_depth, aspect_ratio and \
-                     edge_taper apply to the blackbody disk model only"
+                    "t_in, doppler_beaming, redshift_color, optical_depth, aspect_ratio, \
+                     density_index and edge_taper apply to the blackbody disk model only"
                         .into(),
                 );
             }
@@ -611,6 +620,7 @@ mod tests {
             redshift_color: None,
             optical_depth: None,
             aspect_ratio: None,
+            density_index: None,
             edge_taper: None,
             emissivity_index: None,
             g_power: None,
@@ -665,6 +675,13 @@ mod tests {
             ..disk_section(18.0)
         };
         assert!(build_disk(&stylized_with_toggle).is_err());
+
+        let stylized_with_density_index = DiskSection {
+            model: DiskModelKind::Stylized,
+            density_index: Some(2.0),
+            ..disk_section(18.0)
+        };
+        assert!(build_disk(&stylized_with_density_index).is_err());
     }
 
     fn sky_section() -> SkySection {

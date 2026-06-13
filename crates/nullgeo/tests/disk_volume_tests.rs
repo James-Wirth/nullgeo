@@ -2,9 +2,9 @@ use nullgeo::geometry::Vec4;
 use nullgeo::integrator::Tolerances;
 use nullgeo::spacetimes::{Kerr, Schwarzschild};
 use nullgeo::{
-    render, shade_beauty, tone_map, trace_disk, trace_geometry, Camera, CameraPose, CameraSpec,
-    Disk, DiskModel, DiskVolume, EquatorialAnnulus, RayClass, Scene, SkyMap, Termination,
-    TraceConfig,
+    render, shade_beauty, shakura_sunyaev_peak_radius, tone_map, trace_disk, trace_geometry,
+    Camera, CameraPose, CameraSpec, Disk, DiskModel, DiskVolume, EquatorialAnnulus, RayClass,
+    Scene, SkyMap, Termination, TraceConfig,
 };
 
 const GOLDEN: [u8; 588] = [
@@ -74,6 +74,7 @@ fn blackbody(
             redshift_color: true,
             optical_depth,
             aspect_ratio,
+            density_index: 3.0,
             edge_taper,
         },
     }
@@ -108,8 +109,8 @@ fn vertical_column_integrates_to_tau_perp() {
         r_out: 20.0,
         tau0: 7.0,
         aspect_ratio: 0.1,
+        density_index: 3.0,
         w_out: 0.0,
-        w_in: 0.0,
     };
     for r in [9.0, 13.0, 17.0] {
         let h = volume.scale_height(r);
@@ -135,8 +136,8 @@ fn tau_eff_increases_toward_grazing_incidence() {
         r_out: 20.0,
         tau0: 5.0,
         aspect_ratio: 0.0,
+        density_index: 3.0,
         w_out: 0.0,
-        w_in: 0.0,
     };
     let mut last = 0.0;
     for mu in [1.0, 0.7, 0.4, 0.2, 0.05] {
@@ -147,24 +148,71 @@ fn tau_eff_increases_toward_grazing_incidence() {
 }
 
 #[test]
-fn taper_zeroes_the_outer_edge_and_saturates_the_core() {
+fn surface_density_peaks_near_the_inner_edge_then_declines_to_zero() {
+    let r_in = 6.0;
+    let density_index = 3.0;
     let volume = DiskVolume {
-        r_in: 6.0,
+        r_in,
         r_out: 20.0,
         tau0: 9.0,
         aspect_ratio: 0.1,
+        density_index,
         w_out: 3.0,
-        w_in: 3.0,
     };
-    assert_eq!(volume.tau_perp(20.0), 0.0);
     assert_eq!(volume.tau_perp(6.0), 0.0);
-    assert!((volume.tau_perp(13.0) - 9.0).abs() < 1e-12);
-    let mut last = volume.tau_perp(17.0);
-    for r in [18.0, 19.0, 19.5, 20.0] {
+    assert_eq!(volume.tau_perp(20.0), 0.0);
+
+    let r_peak = r_in * ((2.0 * density_index + 1.0) / (2.0 * density_index)).powi(2);
+    assert!((volume.tau_perp(r_peak) - 9.0).abs() < 1e-9);
+
+    let mut last = f64::INFINITY;
+    let mut r = r_peak + 0.5;
+    while r < 20.0 {
         let here = volume.tau_perp(r);
-        assert!(here <= last, "taper not monotone near r_out at r = {r}");
+        assert!(here <= last, "tau_perp not monotone declining at r = {r}");
+        assert!(here < 9.0, "tau_perp exceeds the peak at r = {r}");
         last = here;
+        r += 0.5;
     }
+}
+
+#[test]
+fn occultation_fades_outward_in_step_with_emission() {
+    let r_in = 6.0;
+    let volume = DiskVolume {
+        r_in,
+        r_out: 20.0,
+        tau0: 2.0,
+        aspect_ratio: 0.0,
+        density_index: 3.0,
+        w_out: 4.0,
+    };
+    let mu = 0.3;
+    let transmission = |r: f64| (-volume.tau_eff(r, mu)).exp();
+
+    let r_peak = shakura_sunyaev_peak_radius(r_in);
+    let mut last = transmission(r_peak);
+    let mut r = r_peak + 0.5;
+    while r < 20.0 {
+        let here = transmission(r);
+        assert!(
+            here >= last - 1e-12,
+            "transmission does not increase outward at r = {r}: {here} < {last}"
+        );
+        last = here;
+        r += 0.5;
+    }
+
+    assert!(
+        transmission(r_peak) < 0.05,
+        "the hot inner disk should still occult: {}",
+        transmission(r_peak)
+    );
+    assert!(
+        transmission(19.9) > 0.9,
+        "the cool outer rim should be nearly transparent: {}",
+        transmission(19.9)
+    );
 }
 
 #[test]
@@ -310,8 +358,8 @@ fn opaque_core_ray_saturates_early_with_bounded_steps() {
         r_out: 20.0,
         tau0: 40.0,
         aspect_ratio: 0.1,
+        density_index: 3.0,
         w_out: 0.0,
-        w_in: 0.0,
     };
     let cfg = TraceConfig {
         disk: Some(EquatorialAnnulus {

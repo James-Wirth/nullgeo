@@ -17,6 +17,7 @@ pub enum DiskModel {
         redshift_color: bool,
         optical_depth: f64,
         aspect_ratio: f64,
+        density_index: f64,
         edge_taper: f64,
     },
 }
@@ -43,29 +44,30 @@ impl Disk {
                 redshift_color: true,
                 optical_depth: f64::INFINITY,
                 aspect_ratio: 0.0,
+                density_index: 3.0,
                 edge_taper: 0.0,
             },
         }
     }
 
     pub fn volume(&self, r_in: f64) -> DiskVolume {
-        let (tau0, aspect_ratio, edge_taper) = match self.model {
-            DiskModel::Stylized { .. } => (f64::INFINITY, 0.0, 0.0),
+        let (tau0, aspect_ratio, density_index, edge_taper) = match self.model {
+            DiskModel::Stylized { .. } => (f64::INFINITY, 0.0, 3.0, 0.0),
             DiskModel::Blackbody {
                 optical_depth,
                 aspect_ratio,
+                density_index,
                 edge_taper,
                 ..
-            } => (optical_depth, aspect_ratio, edge_taper),
+            } => (optical_depth, aspect_ratio, density_index, edge_taper),
         };
-        let width = edge_taper * (self.r_out - r_in);
         DiskVolume {
             r_in,
             r_out: self.r_out,
             tau0,
             aspect_ratio,
-            w_out: width,
-            w_in: width,
+            density_index,
+            w_out: edge_taper * (self.r_out - r_in),
         }
     }
 }
@@ -76,8 +78,8 @@ pub struct DiskVolume {
     pub r_out: f64,
     pub tau0: f64,
     pub aspect_ratio: f64,
+    pub density_index: f64,
     pub w_out: f64,
-    pub w_in: f64,
 }
 
 impl DiskVolume {
@@ -85,16 +87,33 @@ impl DiskVolume {
         self.aspect_ratio * r
     }
 
-    pub fn taper(&self, r: f64) -> f64 {
-        ramp(self.r_out - r, self.w_out) * ramp(r - self.r_in, self.w_in)
+    pub fn surface_density(&self, r: f64) -> f64 {
+        if r <= self.r_in || r >= self.r_out {
+            return 0.0;
+        }
+        let peak = self.surface_density_peak();
+        if peak <= 0.0 {
+            return 0.0;
+        }
+        surface_density_shape(self.r_in, self.density_index, r) * ramp(self.r_out - r, self.w_out)
+            / peak
+    }
+
+    fn surface_density_peak(&self) -> f64 {
+        let p = self.density_index;
+        if p <= 0.0 {
+            return surface_density_shape(self.r_in, p, self.r_out);
+        }
+        let r_peak = self.r_in * ((2.0 * p + 1.0) / (2.0 * p)).powi(2);
+        surface_density_shape(self.r_in, p, r_peak)
     }
 
     pub fn tau_perp(&self, r: f64) -> f64 {
-        let taper = self.taper(r);
-        if taper == 0.0 {
+        let sigma = self.surface_density(r);
+        if sigma == 0.0 {
             0.0
         } else {
-            self.tau0 * taper
+            self.tau0 * sigma
         }
     }
 
@@ -111,6 +130,13 @@ impl DiskVolume {
     pub fn tau_eff(&self, r: f64, mu: f64) -> f64 {
         self.tau_perp(r) / mu.abs()
     }
+}
+
+fn surface_density_shape(r_in: f64, density_index: f64, r: f64) -> f64 {
+    if r <= r_in {
+        return 0.0;
+    }
+    (1.0 - (r_in / r).sqrt()) * (r / r_in).powf(-density_index)
 }
 
 fn ramp(edge_distance: f64, width: f64) -> f64 {
