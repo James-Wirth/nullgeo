@@ -1,12 +1,15 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/James-Wirth/nullgeo/main/assets/logo.svg" alt="nullgeo" width="420">
+  <img src="https://github.com/James-Wirth/nullgeo/releases/download/assets/kerr_starfield_hdr.png" alt="Kerr black hole" width="800">
 </p>
 
-## About
 
-This is a fast general relativistic ray-tracing engine built with Rust. The long-term goal is to support relativistic visualisation (e.g. black hole shadows, gravitational lensing, and eventually radiative transfer effects like attenuation) in arbitrary spacetime geometries.  
+## nullgeo
 
-All quantities are in geometrized units ($G=c=1$).
+This is a general relativistic ray tracing library written in Rust. 
+
+Currently, we have implemented the Minkowski, Schwarzschild, Reissner–Nordström, Kerr, and the Ellis wormhole spacetimes.
+
+All quantities are in geometrized units ($G = c = 1$), and we have adopted the signature $(-,+,+,+)$.
 
 ## Installation
 
@@ -16,74 +19,61 @@ All quantities are in geometrized units ($G=c=1$).
 cargo install nullgeo-cli
 ```
 
-This installs the `nullgeo` binary. Build with `--features parallel` to enable Rayon-based parallel ray tracing:
-
-```
-cargo install nullgeo-cli --features parallel
-```
-
 ### Library
-
-```
-cargo add nullgeo
-```
-
-Or in `Cargo.toml`:
 
 ```toml
 [dependencies]
-nullgeo = "0.1"
+nullgeo = "0.2"
 ```
-
-Enable the optional `parallel` feature for Rayon support: `nullgeo = { version = "0.1", features = ["parallel"] }`. 
 
 ## Example Usage (with CLI)
 
-### e.g. Schwarzschild shadow, $512 \times 512$, camera at $x=-30$
+A scene can be defined with a TOML file (see below). To render the scene, run:
 
 ```
-nullgeo shadow \
-    --metric=schwarzschild \
-    --mass=1.0 \
-    --width=512 --height=512 \
-    --fov-deg=30.0 \
-    --cam-x=-30.0 \
-    --dl=0.005 \
-    --max-steps=20000 \
-    --out=shadow.pgm
+nullgeo render scene.toml
 ```
 
-## Theory
+### e.g. Kerr black hole, $a = 0.9M$, with accretion disk
 
-### Hamiltonian Formulation
+```toml
+[metric]
+kind = "kerr"
+mass = 1.0
+spin = 0.9
 
-The Hamiltonian for photons in GR is
+[camera]
+position = [-85.0, 0.0, 9.0]
+fov_deg  = 24.0
+width    = 640
+height   = 360
+supersample = 3
+supersample_max = 4              
 
-```math
-H(x, p) = \tfrac{1}{2} g^{\mu\nu}(x) p_{\mu} p_{\nu}
+[disk]                           
+r_out = 18.0
+t_in  = 10000.0          
+optical_depth = 2.5
+aspect_ratio  = 0.05
+
+[sky]
+checker_deg = 15.0
+
+[[output]]
+path = "kerr_output.png"
+kind = "beauty"
+exposure = 4.0
+tone = "aces"
 ```
 
-together with the null constraint $H=0$. Hamilton's equations give the trajectory:
+### Trace a single ray (for debugging)
 
-```math
-\dot{x}^{\mu} = \frac{\partial H}{\partial p_{\mu}} = g^{\mu\nu} p_{\nu}, \qquad \dot{p}_{\mu} = -\frac{\partial H}{\partial x^{\mu}} = -\tfrac{1}{2} \partial_{\mu} g^{\rho\sigma}\, p_{\rho} p_{\sigma}
+```
+nullgeo propagate --metric kerr --spin 0.9 --pos=-20,0,5 --dir=1,0,0 --out ray.csv
 ```
 
-where the dot signifies differentiation with respect to an affine parameter $\lambda$.
+creates a file `ray.csv` containing $(\lambda, t, x, y, z, H)$.
 
-### Pinhole Camera and the Local Orthonormal Frame
+## License
 
-A local tetrad $\lbrace e_a^{\mu} \rbrace$ is constructed at the camera's position. Note that the Latin $a$ in this notation labels the vector in the basis, and is not an index.
-
-The spatial unit vectors $e_i^{\mu}$ are constructed by projecting the coordinate basis $\partial_i$ onto the 3-plane orthogonal to the timelike unit vector $e_0^{\mu} \sim u$, and carrying out Gram-Schmidt orthogonalization with the induced metric $h := g + u \otimes u$ (see e.g. Wald).
-
-A photon with spatial direction $\mathbf{n}$ and energy $E$ in the local tetrad has four momentum $p^{a} = E(1, n^{i})$. The covariant components in the coordinate basis can then be obtained via $p_{\mu} = g_{\mu\nu} e_{a}{}^{\nu} p^{a}$.
-
-## Numerics
-
-We use Rayon's `par_iter_mut()` over the image buffer. For each pixel, a worker:
-
-1. Initializes the ray state by computing the photon's null covector at the camera position.
-2. Integrates the equations of motion using a 4th-order Runge-Kutta scheme to obtain the trajectory $(x^{\mu}(\lambda), p_{\mu}(\lambda))$.
-3. Applies termination checks, e.g. stopping if the ray falls inside the horizon.
-4. Writes the pixel value to the grayscale image buffer.
+MIT or Apache-2.0
