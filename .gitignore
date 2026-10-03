@@ -4,6 +4,8 @@
 .idea
 .vscode/*.log
 
-# CLI render outputs
 *.pgm
 *.ppm
+
+/scratch/
+/notes/

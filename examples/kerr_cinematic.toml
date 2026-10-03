@@ -19,7 +19,8 @@ r_out = 20.0
 t_in = 10000.0
 optical_depth = 2.5
 aspect_ratio = 0.05
-edge_taper = 0.25
+density_index = 3.0
+edge_taper = 0.2
 
 [sky]
 uniform = [0.0, 0.0, 0.0]
