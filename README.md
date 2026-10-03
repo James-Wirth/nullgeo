@@ -74,6 +74,10 @@ nullgeo propagate --metric kerr --spin 0.9 --pos=-20,0,5 --dir=1,0,0 --out ray.c
 
 creates a file `ray.csv` containing $(\lambda, t, x, y, z, H)$.
 
+An optional [scientific thin-disk transfer export](docs/transfer-export.md) preserves
+all contributing subrays for emissivity reuse and direct visibility quadrature.
+See `examples/transfer_disk.toml` and `examples/transfer_visibility.py`.
+
 ## License
 
 MIT or Apache-2.0

@@ -106,6 +106,13 @@ impl Camera {
         self.subpixel_offsets_for(self.spec.supersample)
     }
 
+    /// Actual dimensionless pinhole screen coordinates (right, up), before normalization.
+    pub fn screen_coordinates(&self, pixel: usize, subpixel: (f64, f64)) -> (f64, f64) {
+        let (w, h) = self.spec.res;
+        let (scale_u, scale_v) = self.scales();
+        screen_coordinates(scale_u, scale_v, w, h, pixel % w, pixel / w, subpixel)
+    }
+
     pub fn subpixel_offsets_for(&self, n: usize) -> Vec<(f64, f64)> {
         (0..n * n)
             .map(|k| {
@@ -188,10 +195,23 @@ fn pixel_direction(
     j: usize,
     subpixel: (f64, f64),
 ) -> [f64; 3] {
-    let u = (2.0 * ((i as f64 + subpixel.0) / w as f64) - 1.0) * scale_u;
-    let v = (1.0 - 2.0 * ((j as f64 + subpixel.1) / h as f64)) * scale_v;
+    let (u, v) = screen_coordinates(scale_u, scale_v, w, h, i, j, subpixel);
     let inv_norm = 1.0 / (1.0 + u * u + v * v).sqrt();
     [inv_norm, u * inv_norm, v * inv_norm]
+}
+
+fn screen_coordinates(
+    scale_u: f64,
+    scale_v: f64,
+    w: usize,
+    h: usize,
+    i: usize,
+    j: usize,
+    subpixel: (f64, f64),
+) -> (f64, f64) {
+    let u = (2.0 * ((i as f64 + subpixel.0) / w as f64) - 1.0) * scale_u;
+    let v = (1.0 - 2.0 * ((j as f64 + subpixel.1) / h as f64)) * scale_v;
+    (u, v)
 }
 
 fn radical_inverse(mut index: usize, base: usize) -> f64 {

@@ -7,9 +7,9 @@ use nullgeo::{
     Camera, CameraPose, CameraSpec, Colormap, Disk, DiskModel, EquirectImage, MapQuantity, SkyMap,
     Spacetime, ToneCurve, TraceConfig,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum MetricKind {
     Minkowski,
@@ -19,7 +19,7 @@ pub enum MetricKind {
     Ellis,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SceneFile {
     pub metric: MetricSection,
@@ -33,7 +33,7 @@ pub struct SceneFile {
     pub outputs: Vec<OutputSection>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct MetricSection {
     pub kind: MetricKind,
@@ -47,7 +47,7 @@ pub struct MetricSection {
     pub b0: f64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CameraSection {
     pub position: [f64; 3],
@@ -68,7 +68,7 @@ pub struct CameraSection {
     pub jitter: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DiskSection {
     #[serde(default)]
@@ -87,7 +87,7 @@ pub struct DiskSection {
     pub g_power: Option<f64>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DiskModelKind {
     #[default]
@@ -95,7 +95,7 @@ pub enum DiskModelKind {
     Stylized,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct SkySection {
     pub checker_deg: Option<f64>,
@@ -106,7 +106,7 @@ pub struct SkySection {
     pub graticule_width_deg: Option<f64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct IntegratorSection {
     #[serde(default = "default_tol")]
@@ -126,7 +126,7 @@ impl Default for IntegratorSection {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct OutputSection {
     pub path: PathBuf,
@@ -140,7 +140,7 @@ pub struct OutputSection {
     pub bit_depth: Option<u32>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToneChoice {
     Reinhard,
@@ -156,7 +156,7 @@ impl ToneChoice {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum OutputKind {
     #[default]
@@ -189,7 +189,7 @@ impl OutputKind {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ColormapChoice {
     Viridis,
@@ -205,7 +205,7 @@ impl ColormapChoice {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
     Png,

@@ -1,0 +1,33 @@
+# Small finite-distance Kerr camera; output paths are relative to the working directory.
+[metric]
+kind = "kerr"
+mass = 1.0
+spin = 0.7
+
+[camera]
+position = [-60.10407640085654, 0.0, 60.10407640085654] # radius 85M
+look_at = [0.0, 0.0, 0.0]
+up = [0.0, 0.0, 1.0]
+fov_deg = 24.0
+width = 32
+height = 24
+supersample = 3
+supersample_max = 3
+jitter = false
+
+[disk]
+model = "stylized"
+r_in = 8.0
+r_out = 18.0
+emissivity_index = 2.0
+g_power = 3.0
+
+[sky]
+uniform = [0.0, 0.0, 0.0]
+
+[integrator]
+tol = 1e-8
+max_steps = 20000
+
+[[output]]
+path = "transfer_disk.pfm"

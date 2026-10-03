@@ -1,5 +1,6 @@
 mod io;
 mod scene_file;
+mod transfer;
 
 use std::path::Path;
 
@@ -26,7 +27,12 @@ struct Cli {
 enum Command {
     Propagate(PropagateArgs),
 
-    Render { scene: String },
+    Render {
+        scene: String,
+        /// Export contributing thin-disk subrays to a new directory (schema v1).
+        #[arg(long, value_name = "DIRECTORY")]
+        transfer_export: Option<std::path::PathBuf>,
+    },
 
     Shadow(ShadowArgs),
 }
@@ -104,7 +110,10 @@ fn main() {
 
     let result = match cli.command {
         Command::Propagate(args) => run_propagate(&args),
-        Command::Render { scene } => run_render(&scene),
+        Command::Render {
+            scene,
+            transfer_export,
+        } => run_render(&scene, transfer_export.as_deref()),
         Command::Shadow(args) => run_shadow(&args),
     };
 
@@ -219,7 +228,7 @@ fn run_propagate(args: &PropagateArgs) -> Result<(), String> {
     Ok(())
 }
 
-fn run_render(path: &str) -> Result<(), String> {
+fn run_render(path: &str, transfer_export: Option<&Path>) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("cannot read {path}: {e}"))?;
     let file: SceneFile =
         toml::from_str(&text).map_err(|e| format!("invalid scene file {path}: {e}"))?;
@@ -241,8 +250,23 @@ fn run_render(path: &str) -> Result<(), String> {
     };
     let cfg = build_trace_config(&file.integrator, file.camera.position);
 
+    if let Some(destination) = transfer_export {
+        transfer::validate(&scene, &camera, &cfg, &file.metric)?;
+        if destination.exists() {
+            return Err(format!(
+                "transfer export destination already exists: {}",
+                destination.display()
+            ));
+        }
+    }
+
     let buffer =
         trace_geometry(spacetime.as_ref(), &camera, &scene, &cfg).map_err(|e| e.to_string())?;
+
+    if let Some(destination) = transfer_export {
+        transfer::write(destination, &buffer, &camera, &scene, &cfg, &file, &text)?;
+        println!("Wrote transfer export {}", destination.display());
+    }
 
     for output in &file.outputs {
         write_output(&buffer, &scene, output)?;
